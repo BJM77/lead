@@ -85,5 +85,5 @@ export async function discoverUrlsAction(input: any) {
     query: SecurityUtils.sanitizePromptInput(input.query)
   };
   const { discoverUrls } = await import('@/ai/flows/discover-urls');
-  return await withTimeout(discoverUrls(sanitizedInput), 45000, 'discoverUrls');
+  return await withTimeout(discoverUrls(sanitizedInput), 90000, 'discoverUrls');
 }
