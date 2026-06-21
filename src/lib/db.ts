@@ -21,6 +21,33 @@ export async function createLead(leadData: Omit<NewLead, 'userId' | 'createdAt'>
   const userId = explicitUserId || auth.currentUser?.uid;
   if (!userId) throw new Error("Operator authentication missing.");
 
+  // Deduplication check by website
+  if (leadData.company?.website) {
+     const websiteQ = query(leadsCollection, where("userId", "==", userId), where("company.website", "==", leadData.company.website));
+     const websiteDocs = await getDocs(websiteQ);
+     if (!websiteDocs.empty) {
+         throw new Error(`Duplicate Lead: A lead with website ${leadData.company.website} already exists in your database.`);
+     }
+  }
+
+  // Deduplication check by sourceUrl
+  if (leadData.sourceUrl) {
+     const sourceUrlQ = query(leadsCollection, where("userId", "==", userId), where("sourceUrl", "==", leadData.sourceUrl));
+     const sourceUrlDocs = await getDocs(sourceUrlQ);
+     if (!sourceUrlDocs.empty) {
+         throw new Error(`Duplicate Lead: A lead from URL ${leadData.sourceUrl} already exists in your database.`);
+     }
+  }
+
+  // Deduplication check by email
+  if (leadData.email && !leadData.email.includes('no-email-')) {
+     const emailQ = query(leadsCollection, where("userId", "==", userId), where("email", "==", leadData.email));
+     const emailDocs = await getDocs(emailQ);
+     if (!emailDocs.empty) {
+         throw new Error(`Duplicate Lead: A lead with email ${leadData.email} already exists in your database.`);
+     }
+  }
+
   const docRef = await addDoc(leadsCollection, {
     ...leadData,
     userId: userId,
