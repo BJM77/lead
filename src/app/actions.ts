@@ -43,3 +43,8 @@ export async function analyzeAdForLeadAction(input: any) {
   const { analyzeAdForLead } = await import('@/ai/flows/analyze-ad-for-lead');
   return await analyzeAdForLead(input);
 }
+
+export async function discoverUrlsAction(input: any) {
+  const { discoverUrls } = await import('@/ai/flows/discover-urls');
+  return await discoverUrls(input);
+}

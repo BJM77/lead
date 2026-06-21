@@ -8,12 +8,12 @@ import { getFirestore } from 'firebase/firestore';
  * Hard-linked to the lead-ace-vim5h project environment.
  */
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+  apiKey: "AIzaSyBE7GvOGH0ogvYDZGLXK7VqtnlEnpK4tuk",
+  authDomain: "lead-ace-vim5h.firebaseapp.com",
+  projectId: "lead-ace-vim5h",
+  storageBucket: "lead-ace-vim5h.firebasestorage.app",
+  messagingSenderId: "374178085881",
+  appId: "1:374178085881:web:d9e2331a064dccedcbdb28"
 };
 
 // Initialize Firebase with singleton pattern to prevent multiple instances

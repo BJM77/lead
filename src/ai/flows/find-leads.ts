@@ -89,6 +89,7 @@ async function backgroundScrapeAndProcess(jobId: string, input: FindLeadsInput) 
       try {
         const enrichedData = await enrichLeadData({
           ...lead,
+          source: lead.source as any,
           targetLocation: input.location || 'Australia',
         });
         

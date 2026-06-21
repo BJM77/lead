@@ -63,7 +63,7 @@ export async function extractLeadFromUrl(input: z.infer<typeof ExtractLeadFromUr
   try {
     const response = await fetch(input.url, { 
       headers: { 'User-Agent': 'LeadAceIntelligenceBot/1.0' },
-      timeout: 10000 
+      signal: AbortSignal.timeout(10000)
     });
     
     if (!response.ok) throw new Error(`HTTP ${response.status}`);

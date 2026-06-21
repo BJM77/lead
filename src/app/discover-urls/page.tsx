@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Search, ExternalLink, ScanSearch, Info, AlertTriangle, CheckCircle } from 'lucide-react';
-import { discoverUrls } from '@/ai/flows/discover-urls';
+import { discoverUrlsAction } from '@/app/actions';
 import { type DiscoveredUrl, type Lead } from '@/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -52,7 +52,7 @@ export default function DiscoverUrlsPage() {
     }
     setIsLoading(true);
     try {
-      const response = await discoverUrls({ query });
+      const response = await discoverUrlsAction({ query, limit: 10 });
       setUrls(response.urls);
       toast({ title: 'Discovery Complete', description: `Identified ${response.urls.length} target URLs.` });
     } catch (error: any) {

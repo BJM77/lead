@@ -80,6 +80,7 @@ const extractLeadFromImageFlow = ai.defineFlow(
 
     const leadToScore: Lead = {
         id: 'temp-img-id', // temporary for scoring
+        userId: 'temp-user',
         name: output.name || 'Unknown',
         title: output.title || 'N/A',
         email: output.email || 'no-email@example.com',
