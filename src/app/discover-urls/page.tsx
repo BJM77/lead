@@ -52,7 +52,11 @@ export default function DiscoverUrlsPage() {
     }
     setIsLoading(true);
     try {
-      const response = await discoverUrlsAction({ query, limit: 10 });
+      const response = await discoverUrlsAction({ 
+        query, 
+        limit: 30, 
+        excludeUrls: Array.from(existingLeadUrls) 
+      });
       setUrls(response.urls);
       toast({ title: 'Discovery Complete', description: `Identified ${response.urls.length} target URLs.` });
     } catch (error: any) {
