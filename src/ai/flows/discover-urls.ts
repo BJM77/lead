@@ -45,7 +45,9 @@ const discoverUrlsFlow = ai.defineFlow(
 
     const prompt = `You are a search intelligence bot. The user is looking for URLs that match a specific search pattern: "${input.query}".
     
-    Based on your internal knowledge, provide a list of {{limit}} unique candidate URLs for real businesses that likely match this pattern.
+    CRITICAL: Only return domains and businesses that are located in Australia. All candidate URLs must belong to Australian companies, organizations, or Australian branches (preferring .com.au, .net.au, .org.au, .edu.au or other domains clearly operating in and targetting the Australian market).
+    
+    Based on your internal knowledge, provide a list of {{limit}} unique candidate URLs for real businesses in Australia that likely match this pattern.
     Focus on well-known or verifiable corporate domains that would have such pages.
     
     For each URL, provide:
