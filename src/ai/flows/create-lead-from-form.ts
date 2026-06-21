@@ -14,22 +14,20 @@ import { NewLeadSchema, type Lead, type NewLead } from '@/types';
 import { ai } from '../genkit';
 
 export const CreateLeadOutputSchema = z.object({
-    leadId: z.string().describe("The ID of the newly created lead."),
+    enrichedLead: NewLeadSchema,
     message: z.string().describe("A summary message of the operation.")
 });
 
 export type CreateLeadOutput = z.infer<typeof CreateLeadOutputSchema>;
 
-
 // This is the main flow that will be called from the client
 export const createLeadFromForm = ai.defineFlow(
   {
     name: 'createLeadFromFormFlow',
-    inputSchema: NewLeadSchema.extend({ userId: z.string().optional() }),
+    inputSchema: NewLeadSchema,
     outputSchema: CreateLeadOutputSchema,
   },
-  async (inputData) => {
-    const { userId, ...leadData } = inputData;
+  async (leadData) => {
     const flowStartTime = Date.now();
     logger.info(`[PERF] Starting createLeadFromForm flow for: "${leadData.name}"`);
 
@@ -41,22 +39,30 @@ export const createLeadFromForm = ai.defineFlow(
     const quality = calculateLeadScore(enrichedData as Lead);
     logger.debug(`[Create Lead] Lead "${enrichedData.name}" scored with quality: ${quality}`);
 
-    const finalLeadData = {
-        ...enrichedData,
+    const isValidEmail = (e: string | undefined | null) => e && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+    const finalEmail = isValidEmail(enrichedData.email) ? enrichedData.email : (isValidEmail(leadData.email) ? leadData.email : `no-email-${Date.now()}@example.com`);
+
+    const finalLeadData: NewLead = {
+        name: enrichedData.name || leadData.name || 'Unknown',
+        title: enrichedData.title || leadData.title,
+        company: enrichedData.company || leadData.company,
+        email: finalEmail as string,
+        phone: enrichedData.phone || leadData.phone,
+        status: enrichedData.status || leadData.status || 'New',
+        source: enrichedData.source || leadData.source || 'AI Search',
+        details: enrichedData.details || leadData.details || '',
+        sourceUrl: enrichedData.sourceUrl || leadData.sourceUrl,
+        seniority: enrichedData.seniority || leadData.seniority,
         quality,
     };
 
-    // 3. Save the lead to the database
-    const newLead = await createLead(finalLeadData, userId);
-    logger.info(`[Create Lead] Successfully saved new lead: ${finalLeadData.name} with score ${quality} and ID ${newLead.id}`);
-
     const flowEndTime = Date.now();
     const duration = ((flowEndTime - flowStartTime) / 1000).toFixed(2);
-    const finalMessage = `Successfully created new lead: ${newLead.name}.`;
+    const finalMessage = `Successfully enriched lead: ${finalLeadData.name}. Ready to save.`;
     logger.info(`[PERF] createLeadFromForm flow finished. Total time: ${duration}s. ${finalMessage}`);
 
     return {
-      leadId: newLead.id,
+      enrichedLead: finalLeadData,
       message: finalMessage,
     };
   }
