@@ -79,9 +79,17 @@ function CaptureContent() {
 
   const handleSaveLead = async (formData: Omit<NewLead, 'userId' | 'createdAt'>) => {
     setIsSaving(true);
+    const userId = (await import('@/lib/firebase')).auth.currentUser?.uid;
+    if (!userId) {
+      toast({ title: 'Authentication Error', description: 'You must be logged in to save leads.', variant: 'destructive' });
+      setIsSaving(false);
+      return;
+    }
+
     try {
         const finalFormData = {
             ...formData,
+            userId,
             details: `${formData.details || ''}\n\nSource URL: ${url}`,
             source: "Web Page Capture" as const,
             sourceUrl: url, // Track source URL for duplicate management

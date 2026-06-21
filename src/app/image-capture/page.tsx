@@ -88,8 +88,20 @@ export default function ImageCapturePage() {
 
   const handleSaveLead = async (formData: Omit<NewLead, 'userId' | 'createdAt'>) => {
     setIsSaving(true);
+    const userId = (await import('@/lib/firebase')).auth.currentUser?.uid;
+    if (!userId) {
+      toast({ title: 'Authentication Error', description: 'You must be logged in to save leads.', variant: 'destructive' });
+      setIsSaving(false);
+      return;
+    }
+
     try {
-        const result = await createLeadFromFormAction(formData);
+        const finalFormData = {
+            ...formData,
+            userId,
+            source: "Image Upload" as const,
+        }
+        const result = await createLeadFromFormAction(finalFormData);
         toast({
             title: "Lead Saved!",
             description: result.message,

@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { auth } from '@/lib/firebase';
 
 
 export default function BulkCapturePage() {
@@ -69,20 +70,28 @@ export default function BulkCapturePage() {
     logger.info(`[Bulk Save] Starting to save ${leadsToSave.length} selected leads.`);
     toast({ title: 'Saving Leads...', description: `Started saving ${leadsToSave.length} leads. See debug logs for progress.` });
 
+    const userId = auth.currentUser?.uid;
+    if (!userId) {
+      toast({ title: 'Authentication Error', description: 'You must be logged in to save leads.', variant: 'destructive' });
+      setIsSaving(false);
+      return;
+    }
+
     let successCount = 0;
     let failCount = 0;
 
     for (const lead of leadsToSave) {
       try {
-        const newLead: Omit<NewLead, 'userId' | 'createdAt'> = {
+        const newLead = {
+          userId,
           name: lead.name || 'N/A',
           title: lead.title,
           company: { name: lead.companyName || lead.name || 'N/A', website: lead.website },
           email: lead.email || `no-email-${Date.now()}@example.com`,
           phone: lead.phone || 'N/A',
-          status: 'New',
+          status: 'New' as const,
           quality: 0, // Calculated on backend
-          source: 'Bulk URL Capture',
+          source: 'Bulk URL Capture' as const,
           sourceUrl: lead.website || url, // Store specific lead URL if available
           details: `${lead.details || ''}\nWebsite: ${lead.website || 'N/A'}\nSource URL: ${url}`,
         };

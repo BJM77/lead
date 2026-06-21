@@ -25,10 +25,11 @@ export type CreateLeadOutput = z.infer<typeof CreateLeadOutputSchema>;
 export const createLeadFromForm = ai.defineFlow(
   {
     name: 'createLeadFromFormFlow',
-    inputSchema: NewLeadSchema,
+    inputSchema: NewLeadSchema.extend({ userId: z.string().optional() }),
     outputSchema: CreateLeadOutputSchema,
   },
-  async (leadData) => {
+  async (inputData) => {
+    const { userId, ...leadData } = inputData;
     const flowStartTime = Date.now();
     logger.info(`[PERF] Starting createLeadFromForm flow for: "${leadData.name}"`);
 
@@ -46,7 +47,7 @@ export const createLeadFromForm = ai.defineFlow(
     };
 
     // 3. Save the lead to the database
-    const newLead = await createLead(finalLeadData);
+    const newLead = await createLead(finalLeadData, userId);
     logger.info(`[Create Lead] Successfully saved new lead: ${finalLeadData.name} with score ${quality} and ID ${newLead.id}`);
 
     const flowEndTime = Date.now();

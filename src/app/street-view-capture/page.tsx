@@ -66,9 +66,17 @@ export default function StreetViewCapturePage() {
     let successCount = 0;
     let failCount = 0;
 
+    const userId = (await import('@/lib/firebase')).auth.currentUser?.uid;
+    if (!userId) {
+      toast({ title: 'Authentication Error', description: 'You must be logged in to save leads.', variant: 'destructive' });
+      setIsSaving(false);
+      return;
+    }
+
     for (const lead of leadsToSave) {
       try {
-        const newLead: Omit<NewLead, 'userId' | 'createdAt'> = {
+        const newLead: NewLead = {
+          userId,
           name: lead.name,
           title: 'N/A',
           company: { name: lead.name },

@@ -17,8 +17,8 @@ import type { Lead, NewLead } from '@/types';
 const leadsCollection = collection(db, 'leads');
 
 // Create a new lead
-export async function createLead(leadData: Omit<NewLead, 'userId' | 'createdAt'>): Promise<Lead> {
-  const userId = auth.currentUser?.uid;
+export async function createLead(leadData: Omit<NewLead, 'userId' | 'createdAt'>, explicitUserId?: string): Promise<Lead> {
+  const userId = explicitUserId || auth.currentUser?.uid;
   if (!userId) throw new Error("Operator authentication missing.");
 
   const docRef = await addDoc(leadsCollection, {
