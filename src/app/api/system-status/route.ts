@@ -14,6 +14,9 @@ async function checkFirebase() {
     await getDocs(q);
     return { status: 'ok', message: 'Successfully connected and queried Firestore.' };
   } catch (error: any) {
+    if (error.code === 'permission-denied' || error.message.includes('Missing or insufficient permissions')) {
+      return { status: 'ok', message: 'Connected to Firestore (read restricted by security rules).' };
+    }
     return { status: 'error', message: `Firestore connection failed: ${error.message}` };
   }
 }
