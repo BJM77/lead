@@ -31,18 +31,18 @@ async function checkAI() {
 }
 
 async function checkOutbound() {
-    try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
-        const response = await fetch('https://example.com', { signal: controller.signal as any });
-        clearTimeout(timeoutId);
-        if (response.ok) {
-            return { status: 'ok', message: 'Server can make outbound requests.' };
-        }
-        return { status: 'error', message: `Outbound request failed with status: ${response.status}` };
-    } catch (error: any) {
-        return { status: 'error', message: `Outbound request failed: ${error.message}` };
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
+    const response = await fetch('https://example.com', { signal: controller.signal as any });
+    clearTimeout(timeoutId);
+    if (response.ok) {
+      return { status: 'ok', message: 'Server can make outbound requests.' };
     }
+    return { status: 'error', message: `Outbound request failed with status: ${response.status}` };
+  } catch (error: any) {
+    return { status: 'error', message: `Outbound request failed: ${error.message}` };
+  }
 }
 
 
@@ -53,7 +53,7 @@ export async function GET() {
     checkOutbound(),
   ]);
 
-  const overallStatus = 
+  const overallStatus =
     firebaseStatus.status === 'ok' && aiStatus.status === 'ok' && outboundStatus.status === 'ok'
       ? 'ok'
       : 'error';
