@@ -1,6 +1,8 @@
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { logger } from './logger';
+import { SecurityUtils } from './security';
+import { ErrorHandler } from './error-handler';
 
 puppeteer.use(StealthPlugin());
 
@@ -120,6 +122,11 @@ async function searchDuckDuckGo(query: string, maxResults: number, retries = 3):
  * Extracts meta description, structured data, and text.
  */
 export async function crawlWebsite(targetUrl: string): Promise<string> {
+  if (!SecurityUtils.validateUrl(targetUrl)) {
+    logger.warn(`[Scraper] Blocked crawl attempt for insecure or local URL: ${targetUrl}`);
+    return '';
+  }
+  
   logger.info(`[Scraper] Starting deep crawl of: ${targetUrl}`);
   let browser;
   try {
