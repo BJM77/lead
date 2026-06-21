@@ -23,7 +23,33 @@ const nextConfig = {
       }
     ],
   },
-  serverExternalPackages: ['puppeteer', 'puppeteer-extra', 'puppeteer-extra-plugin-stealth', 'puppeteer-extra-plugin', 'clone-deep', 'merge-deep', 'genkit', '@genkit-ai/core', 'handlebars'],
+  serverExternalPackages: [
+    'puppeteer',
+    'puppeteer-extra',
+    'puppeteer-extra-plugin-stealth',
+    'puppeteer-extra-plugin',
+    'clone-deep',
+    'merge-deep',
+    'genkit',
+    '@genkit-ai/core',
+    '@genkit-ai/googleai',
+    '@google/generative-ai',
+    'handlebars'
+  ],
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        child_process: false,
+        net: false,
+        tls: false,
+        dns: false,
+      };
+    }
+    return config;
+  },
 };
 
 module.exports = nextConfig;
