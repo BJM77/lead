@@ -1,0 +1,594 @@
+# Lead Ace: AI-Powered Lead Generation & Management Platform - Full Backup
+
+--- FILENAME: .env ---
+
+--- FILENAME: .vscode/settings.json ---
+{
+    "IDX.aI.enableInlineCompletion": true,
+    "IDX.aI.enableCodebaseIndexing": true
+}
+
+--- FILENAME: README.md ---
+# Lead Ace: AI-Powered Lead Generation Platform
+
+Lead Ace is an advanced platform that streamlines the lead generation lifecycle using Generative AI. It allows sales teams to discover, capture, and qualify leads from virtually any source.
+
+## Key Features
+
+### 1. Intelligent Discovery
+- **Natural Language Search**: Describe your target market in plain text.
+- **AI-Driven Keywords**: The system optimizes search terms to find the most relevant businesses.
+
+### 2. Versatile Lead Capture
+- **Web & Bulk URL Capture**: Extract contact details from websites or partner lists.
+- **Ad & Social Capture**: Upload screenshots of advertisements or social posts to identify leads.
+- **Street View Prospecting**: Explore areas via Google Street View to identify and capture physical business leads with photographic evidence.
+
+### 3. Data Intelligence
+- **Automated Enrichment**: Fetch company data including tech stacks, revenue, and funding info.
+- **Predictive Scoring**: Prioritize leads based on an AI-calculated quality score.
+- **AI Summaries**: Get concise, one-paragraph briefings on every lead.
+
+### 4. Management & Analytics
+- **Lead Pipeline**: Track status from discovery to qualification.
+- **Interactive Dashboard**: Visualize conversion rates and lead quality.
+- **CSV Export**: Easily move your leads into other CRM tools.
+
+## Tech Stack
+- **Framework**: Next.js (App Router)
+- **Database/Auth**: Firebase (Firestore & Authentication)
+- **AI**: Google Genkit & Gemini 1.5 Flash
+- **UI**: ShadCN UI, Tailwind CSS, Lucide Icons
+
+--- FILENAME: apphosting.yaml ---
+# Settings to manage and configure a Firebase App Hosting backend.
+# https://firebase.google.com/docs/app-hosting/configure
+
+build:
+  run: npm run build
+start:
+  run: npm run start
+
+runConfig:
+  # Increase this value if you'd like to automatically spin up
+  # more instances in response to increased traffic.
+  maxInstances: 1
+
+--- FILENAME: components.json ---
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "default",
+  "rsc": true,
+  "tsx": true,
+  "tailwind": {
+    "config": "tailwind.config.ts",
+    "css": "src/app/globals.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "aliases": {
+    "components": "@/components",
+    "utils": "@/lib/utils",
+    "ui": "@/components/ui",
+    "lib": "@/lib",
+    "hooks": "@/hooks"
+  },
+  "iconLibrary": "lucide"
+}
+
+--- FILENAME: next.config.ts ---
+import type {NextConfig} from 'next';
+
+const nextConfig: NextConfig = {
+  /* config options here */
+  typescript: {
+    ignoreBuildErrors: false,
+  },
+  eslint: {
+    ignoreDuringBuilds: false,
+  },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'placehold.co',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'maps.googleapis.com',
+        port: '',
+        pathname: '/**',
+      }
+    ],
+  },
+};
+
+export default nextConfig;
+
+--- FILENAME: package.json ---
+{
+  "name": "lead-ace-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack -p 9002",
+    "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
+    "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@genkit-ai/googleai": "^1.13.0",
+    "@genkit-ai/next": "^1.13.0",
+    "@hookform/resolvers": "^4.1.3",
+    "@radix-ui/react-accordion": "^1.2.3",
+    "@radix-ui/react-alert-dialog": "^1.1.6",
+    "@radix-ui/react-avatar": "^1.1.3",
+    "@radix-ui/react-checkbox": "^1.1.4",
+    "@radix-ui/react-collapsible": "^1.1.11",
+    "@radix-ui/react-dialog": "^1.1.6",
+    "@radix-ui/react-dropdown-menu": "^2.1.6",
+    "@radix-ui/react-label": "^2.1.2",
+    "@radix-ui/react-menubar": "^1.1.6",
+    "@radix-ui/react-popover": "^1.1.6",
+    "@radix-ui/react-progress": "^1.1.2",
+    "@radix-ui/react-radio-group": "^1.2.3",
+    "@radix-ui/react-scroll-area": "^1.2.3",
+    "@radix-ui/react-select": "^2.1.6",
+    "@radix-ui/react-separator": "^1.1.2",
+    "@radix-ui/react-slider": "^1.2.3",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-switch": "^1.1.3",
+    "@radix-ui/react-tabs": "^1.1.3",
+    "@radix-ui/react-toast": "^1.2.6",
+    "@radix-ui/react-tooltip": "^1.1.8",
+    "@tanstack/react-table": "^8.19.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "dotenv": "^16.5.0",
+    "embla-carousel-react": "^8.6.0",
+    "firebase": "^11.9.1",
+    "genkit": "^1.13.0",
+    "lucide-react": "^0.475.0",
+    "next": "15.3.3",
+    "node-fetch": "^3.3.2",
+    "patch-package": "^8.0.0",
+    "puppeteer": "^22.12.1",
+    "react": "^18.3.1",
+    "react-day-picker": "^8.10.1",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.54.2",
+    "recharts": "^2.15.1",
+    "tailwind-merge": "^3.0.1",
+    "tailwindcss-animate": "^1.0.7",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/node-fetch": "^2.6.11",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "genkit-cli": "^1.13.0",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}
+
+--- FILENAME: src/ai/dev.ts ---
+import { config } from 'dotenv';
+config();
+
+import '@/ai/flows/suggest-lead-search-terms.ts';
+import '@/ai/flows/lead-summary.ts';
+import '@/ai/flows/find-leads.ts';
+import '@/ai/flows/feedback-loop.ts';
+import '@/ai/flows/analyze-image-for-lead.ts';
+import '@/ai/flows/create-lead-from-form.ts';
+import '@/ai/flows/extract-lead-from-url.ts';
+import '@/ai/flows/health-check.ts';
+import '@/ai/flows/extract-multiple-leads-from-url.ts';
+import '@/ai/flows/analyze-ad-for-lead.ts';
+import '@/ai/flows/prospect-from-street-view.ts';
+
+--- FILENAME: src/ai/flows/analyze-ad-for-lead.ts ---
+'use server';
+
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { logger } from '@/lib/logger';
+import { ExtractedLeadDataSchema, type ExtractedLeadData } from '@/types';
+import fetch from 'node-fetch';
+
+const AnalyzeAdForLeadInputSchema = z.object({
+  photoDataUri: z.string().describe("A screenshot of an ad as a data URI."),
+});
+
+const AnalyzeAdForLeadOutputSchema = z.object({
+    extractedData: ExtractedLeadDataSchema.nullable().optional(),
+    message: z.string().describe("A message describing the outcome."),
+});
+export type AnalyzeAdForLeadOutput = z.infer<typeof AnalyzeAdForLeadOutputSchema>;
+
+const imageAnalysisPrompt = ai.definePrompt({
+    name: 'analyzeAdImageForUrlPrompt',
+    input: { schema: AnalyzeAdForLeadInputSchema },
+    output: { schema: z.object({ companyName: z.string().optional(), websiteUrl: z.string().url().optional() }) },
+    prompt: `You are an expert at analyzing advertisement screenshots (like Google or Facebook ads). Your most important task is to identify and extract the main website URL being advertised. Also, extract the company name.
+
+Image to analyze: {{media url=photoDataUri}}`
+});
+
+const htmlAnalysisPrompt = ai.definePrompt({
+    name: 'analyzeWebsiteForDetailsPrompt',
+    input: { schema: z.object({ htmlContent: z.string(), companyName: z.string().optional() }) },
+    output: { schema: ExtractedLeadDataSchema },
+    prompt: `You are an expert at analyzing a company's website HTML to find contact information. Find the primary contact phone number, physical address, and a contact person's name and title if available. Use the provided company name for context.
+
+Company Name: {{companyName}}
+
+Website HTML:
+\`\`\`html
+{{htmlContent}}
+\`\`\`
+`
+});
+
+export async function analyzeAdForLead(
+  input: z.infer<typeof AnalyzeAdForLeadInputSchema>
+): Promise<AnalyzeAdForLeadOutput> {
+  return analyzeAdForLeadFlow(input);
+}
+
+const analyzeAdForLeadFlow = ai.defineFlow(
+  {
+    name: 'analyzeAdForLeadFlow',
+    inputSchema: AnalyzeAdForLeadInputSchema,
+    outputSchema: AnalyzeAdForLeadOutputSchema,
+  },
+  async (input) => {
+    logger.info('[Ad Analysis] Step 1: Analyzing image for URL.');
+    const imageAnalysisResult = await imageAnalysisPrompt(input);
+    const { companyName, websiteUrl } = imageAnalysisResult.output || {};
+
+    if (!websiteUrl) {
+      logger.warn('[Ad Analysis] Could not find a website URL in the image.');
+      return { message: "The AI could not identify a website URL in the ad. Please try a different image or enter the lead manually." };
+    }
+    logger.info(`[Ad Analysis] Found URL: ${websiteUrl} and Company: ${companyName}`);
+
+    let htmlContent = '';
+    try {
+        logger.info(`[Ad Analysis] Step 2: Fetching content from ${websiteUrl}`);
+        const response = await fetch(websiteUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }});
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        htmlContent = await response.text();
+    } catch (error: any) {
+        logger.error(`[Ad Analysis] Failed to fetch URL ${websiteUrl}: ${error.message}`);
+        return { 
+            extractedData: { companyName, website: websiteUrl },
+            message: `AI found a website, but failed to load it. Please review the extracted data.` 
+        };
+    }
+
+    logger.info('[Ad Analysis] Step 3: Analyzing HTML for contact details.');
+    const htmlAnalysisResult = await htmlAnalysisPrompt({ htmlContent, companyName });
+    const scrapedData = htmlAnalysisResult.output;
+    
+    const finalData: ExtractedLeadData = {
+        name: scrapedData?.name,
+        title: scrapedData?.title,
+        companyName: scrapedData?.companyName || companyName,
+        email: scrapedData?.email,
+        phone: scrapedData?.phone,
+        website: scrapedData?.website || websiteUrl,
+        details: scrapedData?.details,
+    };
+
+    return {
+        extractedData: finalData,
+        message: "Successfully analyzed ad and website. Please verify the details below."
+    };
+  }
+);
+
+--- FILENAME: src/ai/flows/analyze-image-for-lead.ts ---
+'use server';
+
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { logger } from '@/lib/logger';
+import { ExtractedLeadDataSchema } from '@/types';
+import type { ExtractedLeadData } from '@/types';
+
+const AnalyzeImageForLeadInputSchema = z.object({
+  photoDataUri: z.string(),
+});
+export type AnalyzeImageForLeadInput = z.infer<typeof AnalyzeImageForLeadInputSchema>;
+
+const AnalyzeImageForLeadOutputSchema = z.object({
+    extractedData: ExtractedLeadDataSchema.optional(),
+    message: z.string(),
+});
+export type AnalyzeImageForLeadOutput = z.infer<typeof AnalyzeImageForLeadOutputSchema>;
+
+export async function analyzeImageForLead(
+  input: AnalyzeImageForLeadInput
+): Promise<AnalyzeImageForLeadOutput> {
+  return analyzeImageForLeadFlow(input);
+}
+
+const prompt = ai.definePrompt({
+  name: 'analyzeImageForLeadPrompt',
+  input: { schema: AnalyzeImageForLeadInputSchema },
+  output: { schema: ExtractedLeadDataSchema.optional() },
+  prompt: `You are an expert at analyzing images of advertisements, business cards, and social media posts to extract lead information.
+Analyze the provided image and extract: name, job title, company name, email, phone number, and website.
+Image to analyze: {{media url=photoDataUri}}`,
+});
+
+const analyzeImageForLeadFlow = ai.defineFlow(
+  {
+    name: 'analyzeImageForLeadFlow',
+    inputSchema: AnalyzeImageForLeadInputSchema,
+    outputSchema: AnalyzeImageForLeadOutputSchema,
+  },
+  async (input) => {
+    const { output } = await prompt(input);
+    if (!output || (!output.name && !output.companyName)) {
+      return { message: "The AI could not identify a potential lead in this image." };
+    }
+    return { 
+        extractedData: output,
+        message: "AI analysis complete. Please verify the extracted information below."
+    };
+  }
+);
+
+--- FILENAME: src/ai/flows/create-lead-from-form.ts ---
+'use server';
+
+import { z } from 'genkit';
+import { enrichLeadData } from '@/lib/enrichment';
+import { calculateLeadScore } from '@/lib/scoring';
+import { createLead } from '@/lib/db';
+import { logger } from '@/lib/logger';
+import { NewLeadSchema } from '@/types';
+import { ai } from '../genkit';
+
+export const CreateLeadOutputSchema = z.object({
+    leadId: z.string(),
+    message: z.string()
+});
+
+export const createLeadFromForm = ai.defineFlow(
+  {
+    name: 'createLeadFromFormFlow',
+    inputSchema: NewLeadSchema,
+    outputSchema: CreateLeadOutputSchema,
+  },
+  async (leadData) => {
+    const enrichedData = await enrichLeadData(leadData);
+    const quality = calculateLeadScore(enrichedData as any);
+    const finalLeadData = { ...enrichedData, quality, createdAt: Date.now() };
+    const newLead = await createLead(finalLeadData as any);
+    return { leadId: newLead.id, message: `Successfully created new lead: ${newLead.name}.` };
+  }
+);
+
+--- FILENAME: src/ai/flows/extract-lead-from-url.ts ---
+'use server';
+
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { logger } from '@/lib/logger';
+import { ExtractedLeadDataSchema } from '@/types';
+import fetch from 'node-fetch';
+
+const ExtractLeadFromUrlInputSchema = z.object({
+  url: z.string().url(),
+});
+
+const prompt = ai.definePrompt({
+  name: 'extractLeadFromUrlPrompt',
+  input: { schema: z.object({ htmlContent: z.string() }) },
+  output: { schema: ExtractedLeadDataSchema.optional() },
+  prompt: `Extract lead info from this HTML: {{htmlContent}}`,
+});
+
+export async function extractLeadFromUrl(input: z.infer<typeof ExtractLeadFromUrlInputSchema>) {
+  const response = await fetch(input.url);
+  const htmlContent = await response.text();
+  const { output } = await prompt({ htmlContent });
+  return { extractedData: output, message: "Analysis complete." };
+}
+
+--- FILENAME: src/ai/flows/find-leads.ts ---
+'use server';
+
+import { z } from 'genkit';
+import { scrapeWithAI } from '@/lib/scraper';
+import { enrichLeadData } from '@/lib/enrichment';
+import { calculateLeadScore } from '@/lib/scoring';
+import { suggestLeadSearchTerms } from './suggest-lead-search-terms';
+import { createLead } from '@/lib/db';
+import { logger } from '@/lib/logger';
+import { ai } from '../genkit';
+
+export const findLeads = ai.defineFlow(
+  {
+    name: 'findLeadsFlow',
+    inputSchema: z.object({ searchContext: z.string() }),
+    outputSchema: z.object({ totalLeadsFound: z.number(), message: z.string() }),
+  },
+  async (input) => {
+    const result = await suggestLeadSearchTerms({ idealLeadProfileDescription: input.searchContext });
+    const terms = result.searchTerms.split(',').map(t => t.trim());
+    const scrapedLeads = await scrapeWithAI({ source: 'linkedin', searchTerms: terms, maxResults: 2 });
+    
+    for (const lead of scrapedLeads) {
+      const enriched = await enrichLeadData(lead);
+      await createLead({ ...enriched, status: 'New', quality: calculateLeadScore(enriched as any), source: 'AI Search' } as any);
+    }
+    return { totalLeadsFound: scrapedLeads.length, message: "Lead discovery complete." };
+  }
+);
+
+--- FILENAME: src/ai/genkit.ts ---
+import {genkit} from 'genkit';
+import {googleAI} from '@genkit-ai/googleai';
+
+export const ai = genkit({
+  plugins: [googleAI()],
+  model: 'googleai/gemini-1.5-flash-latest',
+});
+
+--- FILENAME: src/app/layout.tsx ---
+'use client';
+
+import './globals.css';
+import { usePathname, useRouter } from 'next/navigation';
+import { Toaster } from '@/components/ui/toaster';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import React, { useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { ClientLayout } from '@/components/client-layout';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body className="font-body antialiased">
+        <ClientLayout>{children}</ClientLayout>
+        <Toaster />
+      </body>
+    </html>
+  );
+}
+
+--- FILENAME: src/app/page.tsx ---
+import { redirect } from 'next/navigation';
+
+export default function RootPage() {
+  redirect('/dashboard');
+}
+
+--- FILENAME: src/app/dashboard/page.tsx ---
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import { LeadDataTable } from '@/components/lead-data-table';
+import { columns } from '@/components/lead-columns';
+import { listenToLeads } from '@/lib/db';
+import { Loader2 } from 'lucide-react';
+
+export default function DashboardPage() {
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    return listenToLeads((data) => {
+      setLeads(data);
+      setLoading(false);
+    });
+  }, []);
+
+  return (
+    <div className="p-8 space-y-8">
+      <h1 className="text-3xl font-bold">Dashboard</h1>
+      {loading ? <Loader2 className="animate-spin" /> : <LeadDataTable columns={columns({ onLeadDeleted: () => {} })} data={leads} />}
+    </div>
+  );
+}
+
+--- FILENAME: src/lib/firebase.ts ---
+import { initializeApp, getApps } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyARsaLeyLocvi8MGaBHCcPgAgysMadmx9c",
+  authDomain: "lead-ace-vim5h.firebaseapp.com",
+  projectId: "lead-ace-vim5h",
+  storageBucket: "lead-ace-vim5h.firebasestorage.app",
+  messagingSenderId: "374178085881",
+  appId: "1:374178085881:web:d9e2331a064dccedcbdb28"
+};
+
+export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+
+--- FILENAME: src/lib/db.ts ---
+import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, onSnapshot, query, where, getDoc } from 'firebase/firestore';
+import { auth, db } from './firebase';
+
+export async function createLead(data) {
+  const userId = auth.currentUser?.uid;
+  return addDoc(collection(db, 'leads'), { ...data, userId, createdAt: Date.now() });
+}
+
+export function listenToLeads(callback) {
+  const userId = auth.currentUser?.uid;
+  const q = query(collection(db, 'leads'), where("userId", "==", userId));
+  return onSnapshot(q, (ss) => callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))));
+}
+
+--- FILENAME: src/types/index.ts ---
+import { z } from 'zod';
+
+export const ExtractedLeadDataSchema = z.object({
+  name: z.string().optional(),
+  title: z.string().optional(),
+  companyName: z.string().optional(),
+  email: z.string().email().optional(),
+  phone: z.string().optional(),
+  website: z.string().url().optional(),
+  details: z.string().optional(),
+});
+
+export const LeadSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  name: z.string(),
+  title: z.string().optional(),
+  company: z.object({ name: z.string() }),
+  email: z.string(),
+  phone: z.string().optional(),
+  status: z.string(),
+  quality: z.number(),
+  source: z.string(),
+  details: z.string(),
+  createdAt: z.number(),
+});
+
+export const NewLeadSchema = LeadSchema.omit({ id: true, userId: true, createdAt: true });
+
+--- FILENAME: tsconfig.json ---
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [{ "name": "next" }],
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}

@@ -1,0 +1,425 @@
+
+# Request for Assistance: Persistent Next.js Routing Error
+
+## 1. The Problem
+
+I am experiencing a persistent and recurring runtime error in my Next.js application:
+
+**`Runtime Error: PageNotFoundError: Cannot find module for page: route not found /page`**
+
+This error appears to be related to the application's routing and navigation structure. Despite multiple attempts to fix it by correcting links and restructuring routes, the error continues to surface, suggesting a deeper underlying issue that I have been unable to pinpoint.
+
+The core of the problem seems to be that some part of the application is attempting to navigate to a `/page` route that does not exist and should not exist.
+
+## 2. Application Technology Stack
+
+The application is built with the following technologies:
+
+- **Framework:** Next.js (App Router)
+- **Language:** TypeScript
+- **UI:** React, ShadCN UI Components
+- **Styling:** Tailwind CSS
+- **AI/Backend:** Genkit
+
+## 3. Current File Structure (`src/app` directory)
+
+Here is the current structure of the `src/app` directory, which is responsible for routing:
+
+```
+src/app/
+├── bulk-capture/
+│   └── page.tsx
+├── capture/
+│   └── page.tsx
+├── dashboard/
+│   └── page.tsx
+├── debug/
+│   └── page.tsx
+├── image-capture/
+│   └── page.tsx
+├── social-capture/
+│   └── page.tsx
+├── layout.tsx
+├── page.tsx
+└── globals.css
+```
+
+## 4. Relevant Code Files
+
+Below is the full content of the files that are most likely involved in this routing issue.
+
+---
+### FILENAME: `src/app/layout.tsx`
+---
+```tsx
+import type { Metadata } from 'next';
+import './globals.css';
+import { Toaster } from '@/components/ui/toaster';
+import { AppLayout } from '@/components/app-layout';
+
+export const metadata: Metadata = {
+  title: 'Lead Ace',
+  description: 'AI-powered lead generator',
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        ></link>
+      </head>
+      <body className="font-body antialiased" suppressHydrationWarning>
+        <AppLayout>
+            {children}
+        </AppLayout>
+        <Toaster />
+      </body>
+    </html>
+  );
+}
+```
+
+---
+### FILENAME: `src/app/page.tsx`
+---
+```tsx
+import { redirect } from 'next/navigation';
+
+export default function RootPage() {
+  redirect('/dashboard');
+}
+```
+
+---
+### FILENAME: `src/app/dashboard/page.tsx`
+---
+```tsx
+// This is the new home for the dashboard content, previously at /app/(app)/page.tsx
+'use client';
+
+import React, { useEffect, useMemo, useState } from 'react';
+import { LeadDataTable } from '@/components/lead-data-table';
+import { columns } from '@/components/lead-columns';
+import type { Lead } from '@/types';
+import { DiscoverLeadsDialog } from '@/components/discover-leads-dialog';
+import { AnalyticsCard } from '@/components/analytics-card';
+import { Target, Users, Zap, BarChart, Loader2 } from 'lucide-react';
+import { LeadAnalyticsCharts } from '@/components/lead-analytics-charts';
+import { getLeads, listenToLeads } from '@/lib/db';
+
+type LeadFilter = 'all' | 'highQuality' | 'converted' | 'newThisMonth';
+
+export default function DashboardPage() {
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState<LeadFilter>('all');
+
+  const fetchLeads = async () => {
+    const dbLeads = await getLeads();
+    setLeads(dbLeads.sort((a, b) => b.createdAt - a.createdAt));
+  };
+  
+  useEffect(() => {
+    setLoading(true);
+    const unsubscribe = listenToLeads((dbLeads) => {
+      const sortedLeads = dbLeads.sort((a, b) => b.createdAt - a.createdAt);
+      setLeads(sortedLeads);
+      if (loading) {
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [loading]);
+
+  const handleLeadDeleted = (deletedLeadId: string) => {
+    // This is handled by the real-time listener
+  };
+
+  const highQualityLeadsCount = React.useMemo(
+    () => leads.filter((l) => l.quality > 85).length,
+    [leads]
+  );
+  
+  const convertedLeads = React.useMemo(
+    () => leads.filter((l) => l.status === 'Qualified'),
+    [leads]
+  );
+  
+  const conversionRate = React.useMemo(() => {
+    return leads.length > 0
+      ? ((convertedLeads.length / leads.length) * 100).toFixed(1)
+      : '0.0';
+  }, [leads, convertedLeads]);
+
+  const newThisMonthCount = React.useMemo(() => {
+    const today = new Date();
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).getTime();
+    return leads.filter(l => l.createdAt >= firstDayOfMonth).length;
+  }, [leads]);
+
+  const filteredLeads = useMemo(() => {
+    switch (activeFilter) {
+      case 'highQuality':
+        return leads.filter((l) => l.quality > 85);
+      case 'converted':
+        return convertedLeads;
+      case 'newThisMonth':
+        const today = new Date();
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).getTime();
+        return leads.filter(l => l.createdAt >= firstDayOfMonth);
+      case 'all':
+      default:
+        return leads;
+    }
+  }, [leads, activeFilter, convertedLeads]);
+
+  return (
+    <div className="flex flex-1 flex-col gap-4 md:gap-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Lead Dashboard
+            </h1>
+            <p className="text-muted-foreground">
+              An overview of your lead generation performance.
+            </p>
+          </div>
+          <DiscoverLeadsDialog onNewLeads={fetchLeads} />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
+          <AnalyticsCard
+            title="Total Leads"
+            value={loading ? '...' : leads.length.toString()}
+            icon={Users}
+            description="All leads currently in the system."
+            onClick={() => setActiveFilter('all')}
+            isActive={activeFilter === 'all'}
+          />
+          <AnalyticsCard
+            title="High Quality Leads"
+            value={loading ? '...' : highQualityLeadsCount.toString()}
+            icon={Zap}
+            description="Leads with a quality score over 85."
+            onClick={() => setActiveFilter('highQuality')}
+            isActive={activeFilter === 'highQuality'}
+          />
+          <AnalyticsCard
+            title="Converted Leads"
+            value={loading ? '...' : `${convertedLeads.length}`}
+            icon={Target}
+            description={`Conversion rate: ${conversionRate}%`}
+            onClick={() => setActiveFilter('converted')}
+            isActive={activeFilter === 'converted'}
+          />
+          <AnalyticsCard
+            title="New This Month"
+            value={loading ? '...' : newThisMonthCount.toString()}
+            icon={BarChart}
+            description="New leads generated this month."
+            onClick={() => setActiveFilter('newThisMonth')}
+            isActive={activeFilter === 'newThisMonth'}
+          />
+        </div>
+
+        <div className="grid auto-rows-max items-start gap-4 md:gap-8 lg:grid-cols-3">
+          <LeadAnalyticsCharts leads={leads} />
+        </div>
+
+        <div className="pt-4">
+          {loading ? (
+            <div className="flex justify-center items-center h-64">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <LeadDataTable columns={columns({ onLeadDeleted: handleLeadDeleted })} data={filteredLeads} />
+          )}
+        </div>
+    </div>
+  );
+}
+```
+
+---
+### FILENAME: `src/components/app-layout.tsx`
+---
+```tsx
+'use client';
+
+import * as React from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarProvider,
+  SidebarTrigger,
+  SidebarRail,
+  SidebarInset,
+} from '@/components/ui/sidebar';
+import { Logo } from './logo';
+import { UserNav } from './user-nav';
+import {
+  LayoutDashboard,
+  ScanSearch,
+  Image as ImageIcon,
+  Bug,
+  ListPlus,
+  MessageSquareQuote,
+} from 'lucide-react';
+
+export function AppLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+
+  const menuItems = [
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/bulk-capture', label: 'Bulk Capture', icon: ListPlus },
+    { href: '/social-capture', label: 'Social Capture', icon: MessageSquareQuote },
+    { href: '/image-capture', label: 'Image Capture', icon: ImageIcon },
+    { href: '/capture', label: 'Web Page Capture', icon: ScanSearch },
+    { href: '/debug', label: 'Debug Logs', icon: Bug },
+  ];
+
+  return (
+    <SidebarProvider>
+      <Sidebar collapsible="icon">
+        <SidebarRail />
+        <SidebarHeader>
+          <Logo />
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarMenu>
+            {menuItems.map((item) => (
+              <SidebarMenuItem key={item.href}>
+                <Link href={item.href}>
+                  <SidebarMenuButton
+                    isActive={pathname === item.href}
+                    tooltip={item.label}
+                  >
+                    <item.icon />
+                    <span>{item.label}</span>
+                  </SidebarMenuButton>
+                </Link>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarContent>
+      </Sidebar>
+
+      <SidebarInset>
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
+            <SidebarTrigger className="sm:hidden" />
+            <div className="relative ml-auto flex-1 md:grow-0">
+              {/* Optional: Add a global search here in the future */}
+            </div>
+            <UserNav />
+        </header>
+        <main className="grid flex-1 items-start gap-4 p-4 sm:px-6 sm:py-0 md:gap-8">
+            {children}
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}
+```
+
+---
+### FILENAME: `src/components/logo.tsx`
+---
+```tsx
+import { Target } from 'lucide-react';
+import Link from 'next/link';
+
+export function Logo() {
+  return (
+    <Link href="/dashboard" className="flex items-center gap-2" aria-label="Lead Ace Home">
+      <Target className="h-7 w-7 text-primary" />
+      <h1 className="text-xl font-bold tracking-tight text-primary sm:text-2xl">
+        Lead Ace
+      </h1>
+    </Link>
+  );
+}
+```
+
+---
+### FILENAME: `next.config.ts`
+---
+```ts
+import type {NextConfig} from 'next';
+
+const nextConfig: NextConfig = {
+  /* config options here */
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'placehold.co',
+        port: '',
+        pathname: '/**',
+      },
+    ],
+  },
+};
+
+export default nextConfig;
+```
+
+---
+### FILENAME: `tsconfig.json`
+---
+```json
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+```
+
+I hope this provides all the necessary context for someone to help you. I am truly sorry for the trouble I've caused.
