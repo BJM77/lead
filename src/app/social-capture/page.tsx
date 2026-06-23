@@ -96,12 +96,12 @@ export default function SocialCapturePage() {
     try {
         const finalFormData = {
             ...formData,
-            userId,
             details: `${formData.details || ''}\n\nSocial URL: ${url}`,
             source: "Social Media Capture" as const,
             sourceUrl: url,
         }
         const result = await createLeadFromFormAction(finalFormData);
+        await (await import('@/lib/db')).createLead(result.enrichedLead, userId);
         toast({ title: 'Lead Saved!', description: result.message });
         handleReset();
     } catch (error: any) {

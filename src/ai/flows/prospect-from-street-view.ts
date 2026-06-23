@@ -15,6 +15,7 @@ const ProspecetedBusinessSchema = z.object({
     phone: z.string().optional(),
     placeId: z.string(),
     streetViewImageUrl: z.string().describe("A URL to a Google Street View static image of the business."),
+    types: z.array(z.string()).optional(),
 });
 
 const ProspectFromStreetViewOutputSchema = z.object({
@@ -101,6 +102,7 @@ const prospectFromStreetViewFlow = ai.defineFlow(
                 phone: placeDetails.formatted_phone_number,
                 placeId: place.place_id,
                 streetViewImageUrl,
+                types: place.types,
             };
         })
     );

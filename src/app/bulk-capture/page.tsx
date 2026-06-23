@@ -83,7 +83,6 @@ export default function BulkCapturePage() {
     for (const lead of leadsToSave) {
       try {
         const newLead = {
-          userId,
           name: lead.name || 'N/A',
           title: lead.title,
           company: { name: lead.companyName || lead.name || 'N/A', website: lead.website },
@@ -95,7 +94,8 @@ export default function BulkCapturePage() {
           sourceUrl: lead.website || url, // Store specific lead URL if available
           details: `${lead.details || ''}\nWebsite: ${lead.website || 'N/A'}\nSource URL: ${url}`,
         };
-        await createLeadFromFormAction(newLead);
+        const result = await createLeadFromFormAction(newLead);
+        await (await import('@/lib/db')).createLead(result.enrichedLead, userId);
         successCount++;
       } catch (error: any) {
         failCount++;

@@ -98,10 +98,10 @@ export default function ImageCapturePage() {
     try {
         const finalFormData = {
             ...formData,
-            userId,
             source: "Image Upload" as const,
         }
         const result = await createLeadFromFormAction(finalFormData);
+        await (await import('@/lib/db')).createLead(result.enrichedLead, userId);
         toast({
             title: "Lead Saved!",
             description: result.message,

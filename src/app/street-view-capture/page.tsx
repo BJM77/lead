@@ -76,7 +76,6 @@ export default function StreetViewCapturePage() {
     for (const lead of leadsToSave) {
       try {
         const newLead: NewLead = {
-          userId,
           name: lead.name,
           title: 'N/A',
           company: { name: lead.name },
@@ -85,9 +84,10 @@ export default function StreetViewCapturePage() {
           status: 'New',
           quality: 0,
           source: 'Street View Prospecting',
-          details: `Address: ${lead.address}\nWebsite: ${lead.website || 'N/A'}`,
+          details: `Address: ${lead.address}\nTypes: ${lead.types?.join(', ') || 'N/A'}\nPlace ID: ${lead.placeId}`,
         };
-        await createLeadFromFormAction(newLead);
+        const result = await createLeadFromFormAction(newLead);
+        await (await import('@/lib/db')).createLead(result.enrichedLead, userId);
         successCount++;
       } catch (error: any) {
         failCount++;

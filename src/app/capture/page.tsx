@@ -89,12 +89,12 @@ function CaptureContent() {
     try {
         const finalFormData = {
             ...formData,
-            userId,
             details: `${formData.details || ''}\n\nSource URL: ${url}`,
             source: "Web Page Capture" as const,
             sourceUrl: url, // Track source URL for duplicate management
         }
         const result = await createLeadFromFormAction(finalFormData);
+        await (await import('@/lib/db')).createLead(result.enrichedLead, userId);
         toast({
             title: "Lead Saved!",
             description: result.message,
