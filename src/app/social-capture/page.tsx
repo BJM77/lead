@@ -60,6 +60,11 @@ export default function SocialCapturePage() {
         response = await extractLeadFromUrlAction({ url });
       }
 
+      if (response && 'error' in response) {
+        toast({ title: 'Analysis Failed', description: response.error, variant: 'destructive' });
+        return;
+      }
+
       setAnalysisMessage(response.message);
 
       if (response.extractedData) {
@@ -101,6 +106,11 @@ export default function SocialCapturePage() {
             sourceUrl: url,
         }
         const result = await createLeadFromFormAction(finalFormData);
+        if (result && 'error' in result) {
+          toast({ title: 'Failed to Save Lead', description: result.error, variant: 'destructive' });
+          setIsSaving(false);
+          return;
+        }
         await (await import('@/lib/db')).createLead(result.enrichedLead, userId);
         toast({ title: 'Lead Saved!', description: result.message });
         handleReset();

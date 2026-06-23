@@ -30,14 +30,7 @@ export async function createLead(leadData: Omit<NewLead, 'userId' | 'createdAt'>
      }
   }
 
-  // Deduplication check by sourceUrl
-  if (leadData.sourceUrl) {
-     const sourceUrlQ = query(leadsCollection, where("userId", "==", userId), where("sourceUrl", "==", leadData.sourceUrl));
-     const sourceUrlDocs = await getDocs(sourceUrlQ);
-     if (!sourceUrlDocs.empty) {
-         throw new Error(`Duplicate Lead: A lead from URL ${leadData.sourceUrl} already exists in your database.`);
-     }
-  }
+  // Removed deduplication check by sourceUrl because bulk captures from the same URL are valid.
 
   // Deduplication check by email
   if (leadData.email && !leadData.email.includes('no-email-')) {

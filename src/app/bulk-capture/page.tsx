@@ -33,6 +33,10 @@ export default function BulkCapturePage() {
     setSelectedLeads({});
     try {
       const response = await extractMultipleLeadsFromUrlAction({ url });
+      if (response && 'error' in response) {
+        toast({ title: 'Analysis Failed', description: response.error, variant: 'destructive' });
+        return;
+      }
       if (response.leads && response.leads.length > 0) {
         setExtractedLeads(response.leads);
         // Initially select all found leads
@@ -82,19 +86,28 @@ export default function BulkCapturePage() {
 
     for (const lead of leadsToSave) {
       try {
+        const isValidEmail = (e: any) => typeof e === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+        const safeEmail = isValidEmail(lead.email) ? lead.email : `no-email-${Date.now()}@example.com`;
+        
         const newLead = {
-          name: lead.name || 'N/A',
-          title: lead.title,
-          company: { name: lead.companyName || lead.name || 'N/A', website: lead.website },
-          email: lead.email || `no-email-${Date.now()}@example.com`,
-          phone: lead.phone || 'N/A',
+          name: lead.name && lead.name !== 'null' ? lead.name : 'N/A',
+          title: lead.title && lead.title !== 'null' ? lead.title : 'N/A',
+          company: { 
+            name: (lead.companyName && lead.companyName !== 'null' ? lead.companyName : null) || (lead.name && lead.name !== 'null' ? lead.name : 'N/A'), 
+            website: lead.website 
+          },
+          email: safeEmail as string,
+          phone: lead.phone && lead.phone !== 'null' ? lead.phone : 'N/A',
           status: 'New' as const,
           quality: 0, // Calculated on backend
           source: 'Bulk URL Capture' as const,
           sourceUrl: lead.website || url, // Store specific lead URL if available
-          details: `${lead.details || ''}\nWebsite: ${lead.website || 'N/A'}\nSource URL: ${url}`,
+          details: `${lead.details && lead.details !== 'null' ? lead.details : ''}\nWebsite: ${lead.website || 'N/A'}\nSource URL: ${url}`,
         };
         const result = await createLeadFromFormAction(newLead);
+        if (result && 'error' in result) {
+          throw new Error(result.error);
+        }
         await (await import('@/lib/db')).createLead(result.enrichedLead, userId);
         successCount++;
       } catch (error: any) {

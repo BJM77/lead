@@ -106,6 +106,15 @@ export function DiscoverLeadsDialog({ onNewLeads }: DiscoverLeadsDialogProps) {
         techStack: values.techStack || undefined,
       });
 
+      if (result && 'error' in result) {
+        toast({
+          variant: 'destructive',
+          title: 'Uh oh! Something went wrong.',
+          description: result.error,
+        });
+        return;
+      }
+
       toast({
         title: 'Lead Discovery Finished',
         description: result.message,

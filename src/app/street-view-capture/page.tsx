@@ -35,6 +35,10 @@ export default function StreetViewCapturePage() {
     setSelectedLeads({});
     try {
       const response = await prospectFromStreetViewAction({ address });
+      if (response && 'error' in response) {
+        toast({ title: 'Analysis Failed', description: response.error, variant: 'destructive' });
+        return;
+      }
       if (response.businesses && response.businesses.length > 0) {
         setExtractedLeads(response.businesses);
         const initialSelection = response.businesses.reduce((acc, lead) => {
@@ -87,6 +91,9 @@ export default function StreetViewCapturePage() {
           details: `Address: ${lead.address}\nTypes: ${lead.types?.join(', ') || 'N/A'}\nPlace ID: ${lead.placeId}`,
         };
         const result = await createLeadFromFormAction(newLead);
+        if (result && 'error' in result) {
+          throw new Error(result.error);
+        }
         await (await import('@/lib/db')).createLead(result.enrichedLead, userId);
         successCount++;
       } catch (error: any) {

@@ -29,6 +29,12 @@ class Logger {
   async addLog(level: LogLevel, message: string) {
     // Log to the server console for immediate visibility during development
     console[level](message);
+    
+    // Only attempt Firestore logging on the client side to avoid PERMISSION_DENIED on the server
+    if (typeof window === 'undefined') {
+      return;
+    }
+    
     try {
       await addDoc(logsCollection, {
         timestamp: Date.now(),

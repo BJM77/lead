@@ -5,11 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Loader2, Wand2, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { createLeadFromFormAction } from '@/app/actions';
+import { createLeadFromFormAction, extractLeadFromUrlAction } from '@/app/actions';
 import type { NewLead, ExtractedLeadData } from '@/types';
 import { LeadVerificationForm } from '@/components/lead-verification-form';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { extractLeadFromUrl } from '@/ai/flows/extract-lead-from-url';
 import { useSearchParams } from 'next/navigation';
 
 function CaptureContent() {
@@ -42,7 +41,11 @@ function CaptureContent() {
     setExtractedData(null);
     setAnalysisMessage(null);
     try {
-      const result = await extractLeadFromUrl({ url });
+      const result = await extractLeadFromUrlAction({ url });
+      if (result && 'error' in result) {
+        toast({ title: 'Analysis Failed', description: result.error, variant: 'destructive' });
+        return;
+      }
 
       setAnalysisMessage(result.message);
       
@@ -94,6 +97,11 @@ function CaptureContent() {
             sourceUrl: url, // Track source URL for duplicate management
         }
         const result = await createLeadFromFormAction(finalFormData);
+        if (result && 'error' in result) {
+          toast({ title: 'Failed to Save Lead', description: result.error, variant: 'destructive' });
+          setIsSaving(false);
+          return;
+        }
         await (await import('@/lib/db')).createLead(result.enrichedLead, userId);
         toast({
             title: "Lead Saved!",

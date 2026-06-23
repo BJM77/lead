@@ -13,20 +13,7 @@ const ExtractLeadFromUrlInputSchema = z.object({
   url: z.string().url().describe("The URL of the website to analyze."),
 });
 
-/**
- * Strips HTML noise to keep token count low and AI focus high.
- */
-function cleanHtml(html: string): string {
-  return html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-    .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '')
-    .replace(/<link\b[^>]*>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .substring(0, 35000); // Safely under Gemini's limits
-}
+import { cleanHtml } from '@/lib/html-cleaner';
 
 /**
  * Identifies technologies based on common HTML/Script markers.

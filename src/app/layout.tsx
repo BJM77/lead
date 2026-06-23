@@ -10,6 +10,11 @@ export const metadata: Metadata = {
   description: 'Advanced AI-Powered Lead Generation and CRM Management',
 };
 
+import { validateEnvironment } from '@/lib/startup-check';
+
+// Run environmental and Puppeteer diagnostics on start
+validateEnvironment().catch(err => console.error('Startup check failed:', err));
+
 export default function RootLayout({
   children,
 }: {

@@ -39,10 +39,10 @@ const prospectFromStreetViewFlow = ai.defineFlow(
   },
   async ({ address }) => {
     logger.info(`[Street View Prospecting] Starting process for address: ${address}`);
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (!apiKey) {
         logger.error("[Street View Prospecting] Google API Key is not configured.");
-        throw new Error("Google API Key is not configured.");
+        throw new Error("Google API Key is not configured. Please define GOOGLE_MAPS_API_KEY.");
     }
 
     let lat: number, lng: number;

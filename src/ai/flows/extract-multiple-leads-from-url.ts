@@ -24,20 +24,7 @@ const ExtractMultipleLeadsOutputSchema = z.object({
 });
 export type ExtractMultipleLeadsOutput = z.infer<typeof ExtractMultipleLeadsOutputSchema>;
 
-/**
- * Strips non-content tags from HTML to reduce token usage and noise for the AI.
- */
-function cleanHtml(html: string): string {
-  return html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-    .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '')
-    .replace(/<link\b[^>]*>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .substring(0, 40000);
-}
+import { cleanHtml } from '@/lib/html-cleaner';
 
 const prompt = ai.definePrompt({
   name: 'extractMultipleLeadsFromUrlPrompt',

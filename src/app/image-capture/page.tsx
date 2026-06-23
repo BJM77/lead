@@ -52,6 +52,10 @@ export default function ImageCapturePage() {
     try {
       // Use the new, more powerful flow
       const response = await analyzeAdForLeadAction({ photoDataUri: previewUrl });
+      if (response && 'error' in response) {
+        toast({ title: 'Analysis Failed', description: response.error, variant: 'destructive' });
+        return;
+      }
       setAnalysisMessage(response.message);
 
       if (response.extractedData) {
@@ -101,6 +105,11 @@ export default function ImageCapturePage() {
             source: "Image Upload" as const,
         }
         const result = await createLeadFromFormAction(finalFormData);
+        if (result && 'error' in result) {
+          toast({ title: 'Failed to Save Lead', description: result.error, variant: 'destructive' });
+          setIsSaving(false);
+          return;
+        }
         await (await import('@/lib/db')).createLead(result.enrichedLead, userId);
         toast({
             title: "Lead Saved!",

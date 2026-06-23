@@ -158,6 +158,10 @@ export default function DiscoverUrlsPage() {
         limit, 
         excludeUrls: Array.from(existingLeadUrls) 
       });
+      if (response && 'error' in response) {
+        toast({ title: 'Search Failed', description: response.error, variant: 'destructive' });
+        return;
+      }
       setUrls(response.urls);
       toast({ title: 'Discovery Complete', description: `Identified ${response.urls.length} target URLs.` });
     } catch (error: any) {
