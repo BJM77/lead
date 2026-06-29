@@ -30,7 +30,7 @@ import { Wand2 } from 'lucide-react';
 
 const formSchema = z.object({
   companyName: z.string().min(1, 'Company name is required.'),
-  name: z.string().min(1, 'Contact name is required.'),
+  name: z.string().optional().or(z.literal('')),
   title: z.string().optional(),
   email: z.string().email('Invalid email address.').optional().or(z.literal('')),
   phone: z.string().optional(),
@@ -99,7 +99,7 @@ export function LeadVerificationForm({
 
   const handleFormSubmit = (values: z.infer<typeof formSchema>) => {
     const newLead: Omit<NewLead, 'userId' | 'createdAt'> = {
-      name: values.name,
+      name: values.name || '',
       title: values.title,
       company: { 
         name: values.companyName, 

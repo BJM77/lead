@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Logo } from './logo';
 import { UserNav } from './user-nav';
+import { MobileNav } from './mobile-nav';
 import {
   LayoutDashboard,
   ScanSearch,
@@ -77,10 +78,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
             <UserNav />
         </header>
-        <main className="flex flex-1 flex-col gap-4 p-4 sm:px-6 sm:py-0 md:gap-8">
+        <main className="flex flex-1 flex-col gap-4 p-4 pb-20 sm:px-6 sm:py-0 md:gap-8 sm:pb-0">
             {children}
         </main>
       </SidebarInset>
+      <MobileNav />
     </SidebarProvider>
   );
 }

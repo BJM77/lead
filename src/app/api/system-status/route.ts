@@ -36,7 +36,7 @@ async function checkAI() {
 async function checkOutbound() {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15-second timeout
     const response = await fetch('https://example.com', { signal: controller.signal as any });
     clearTimeout(timeoutId);
     if (response.ok) {
