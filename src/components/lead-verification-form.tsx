@@ -36,6 +36,11 @@ const formSchema = z.object({
   phone: z.string().optional(),
   website: z.string().url('Invalid URL.').optional().or(z.literal('')),
   details: z.string().optional(),
+  address: z.string().optional().or(z.literal('')),
+  city: z.string().optional().or(z.literal('')),
+  state: z.string().optional().or(z.literal('')),
+  postalCode: z.string().optional().or(z.literal('')),
+  country: z.string().optional().or(z.literal('')),
 });
 
 type LeadVerificationFormProps = {
@@ -65,6 +70,11 @@ export function LeadVerificationForm({
       phone: '',
       website: '',
       details: '',
+      address: '',
+      city: '',
+      state: '',
+      postalCode: '',
+      country: '',
     },
   });
 
@@ -78,6 +88,11 @@ export function LeadVerificationForm({
         phone: initialData.phone || '',
         website: initialData.website || '',
         details: initialData.details || '',
+        address: initialData.address || '',
+        city: initialData.city || '',
+        state: initialData.state || '',
+        postalCode: initialData.postalCode || '',
+        country: initialData.country || '',
       });
     }
   }, [initialData, form]);
@@ -88,7 +103,15 @@ export function LeadVerificationForm({
       title: values.title,
       company: { 
         name: values.companyName, 
-        techStack: initialData?.detectedTech || [] 
+        techStack: initialData?.detectedTech || [],
+        address: {
+          street: values.address,
+          city: values.city,
+          state: values.state,
+          postalCode: values.postalCode,
+          country: values.country,
+          formatted: [values.address, values.city, values.state, values.postalCode, values.country].filter(Boolean).join(', ')
+        }
       },
       email: values.email || `no-email-${Date.now()}@example.com`,
       phone: values.phone,
@@ -200,6 +223,73 @@ export function LeadVerificationForm({
                 </FormItem>
               )}
             />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem className="col-span-2">
+                    <FormLabel>Street Address</FormLabel>
+                    <FormControl>
+                      <Input placeholder="123 Main St" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="city"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>City</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Sydney" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="state"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>State</FormLabel>
+                    <FormControl>
+                      <Input placeholder="NSW" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="postalCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Postal Code</FormLabel>
+                    <FormControl>
+                      <Input placeholder="2000" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="country"
+                render={({ field }) => (
+                  <FormItem className="col-span-2">
+                    <FormLabel>Country</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Australia" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
              <FormField
               control={form.control}
               name="details"

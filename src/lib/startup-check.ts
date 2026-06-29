@@ -13,17 +13,4 @@ export async function validateEnvironment() {
   } else {
     logger.info('[Startup] All critical environment credentials detected.');
   }
-
-  // Check Puppeteer
-  try {
-    const { checkPuppeteerHealth } = await import('./puppeteer-health');
-    const status = await checkPuppeteerHealth();
-    if (status.status === 'ok') {
-      logger.info('[Startup] Puppeteer environment validation succeeded.');
-    } else {
-      logger.error(`[Startup] Puppeteer check failed: ${status.message}`);
-    }
-  } catch (error) {
-    logger.error(`[Startup] Failed to check Puppeteer health: ${error}`);
-  }
 }

@@ -33,6 +33,7 @@ import { LeadDetails } from '@/components/lead-details';
 import { deleteLead } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { calculateCompleteness } from '@/lib/completeness';
 
 type ColumnsProps = {
   onLeadDeleted: (leadId: string) => void;
@@ -148,6 +149,35 @@ export const columns = ({ onLeadDeleted }: ColumnsProps): ColumnDef<Lead>[] => [
       );
     },
     cell: ({ row }) => <QualityBadge lead={row.original} />,
+  },
+  {
+    id: 'completeness',
+    header: 'Completeness',
+    cell: ({ row }) => {
+      const completeness = calculateCompleteness(row.original);
+      let badgeVariant: 'default' | 'secondary' | 'destructive' = 'secondary';
+      if (completeness.score === 100) badgeVariant = 'default';
+      else if (completeness.score < 60) badgeVariant = 'destructive';
+      
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge variant={badgeVariant} className="cursor-help">
+                {completeness.score}%
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              {completeness.hasRequiredFields ? (
+                <p>All required fields present.</p>
+              ) : (
+                <p>Missing: {completeness.missing.join(', ')}</p>
+              )}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
   },
   {
     accessorKey: 'createdAt',

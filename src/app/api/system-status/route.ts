@@ -48,26 +48,17 @@ async function checkOutbound() {
   }
 }
 
-
-import { checkPuppeteerHealth } from '@/lib/puppeteer-health';
-
-async function checkPuppeteer() {
-  return await checkPuppeteerHealth();
-}
-
 export async function GET() {
-  const [firebaseStatus, aiStatus, outboundStatus, puppeteerStatus] = await Promise.all([
+  const [firebaseStatus, aiStatus, outboundStatus] = await Promise.all([
     checkFirebase(),
     checkAI(),
     checkOutbound(),
-    checkPuppeteer(),
   ]);
 
   const overallStatus =
     firebaseStatus.status === 'ok' && 
     aiStatus.status === 'ok' && 
-    outboundStatus.status === 'ok' &&
-    puppeteerStatus.status === 'ok'
+    outboundStatus.status === 'ok'
       ? 'ok'
       : 'error';
 
@@ -77,7 +68,6 @@ export async function GET() {
       firebase: firebaseStatus,
       ai: aiStatus,
       outbound: outboundStatus,
-      puppeteer: puppeteerStatus,
     },
   });
 }

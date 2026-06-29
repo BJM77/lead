@@ -13,6 +13,7 @@ import type { Lead, NewLead } from '@/types';
 import { createLead, createJob, updateJobProgress } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { ai } from '../genkit';
+import { after } from 'next/server';
 
 const FindLeadsInputSchema = z.object({
   searchContext: z.string(),
@@ -156,8 +157,14 @@ export const findLeads = ai.defineFlow(
     // Create Job synchronously
     const jobId = await createJob('Lead Discovery');
     
-    // Kick off background processing without awaiting
-    backgroundScrapeAndProcess(jobId, input);
+    // Kick off background processing using next.js after to ensure container doesn't sleep
+    after(async () => {
+      try {
+        await backgroundScrapeAndProcess(jobId, input);
+      } catch (err: any) {
+        logger.error(`[Background Job] Error in background task: ${err.message}`);
+      }
+    });
 
     return {
       jobId,

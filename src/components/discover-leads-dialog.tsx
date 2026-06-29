@@ -6,8 +6,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Loader2, Sparkles, Settings2, Eye } from 'lucide-react';
 import Link from 'next/link';
-import { findLeadsAction } from '@/app/actions';
+import { findLeadsAction, findLeadsByPlaceAction } from '@/app/actions';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -52,6 +53,7 @@ const formSchema = z.object({
   industry: z.string().optional(),
   employeeCount: z.string().optional(),
   techStack: z.string().optional(),
+  useGooglePlaces: z.boolean().default(false),
 });
 
 type DiscoverLeadsDialogProps = {
@@ -76,6 +78,7 @@ export function DiscoverLeadsDialog({ onNewLeads }: DiscoverLeadsDialogProps) {
       industry: '',
       employeeCount: '',
       techStack: '',
+      useGooglePlaces: false,
     },
   });
 
@@ -97,14 +100,20 @@ export function DiscoverLeadsDialog({ onNewLeads }: DiscoverLeadsDialogProps) {
     ].filter(Boolean) as string[];
 
     try {
-      const result = await findLeadsAction({
-        searchContext: searchTerms.join(', '),
-        searchTerms: searchTerms,
-        location: values.location || undefined,
-        industry: values.industry || undefined,
-        employeeCount: values.employeeCount || undefined,
-        techStack: values.techStack || undefined,
-      });
+      let result;
+      if (values.useGooglePlaces) {
+        const query = [...searchTerms, values.location, values.industry].filter(Boolean).join(' ');
+        result = await findLeadsByPlaceAction({ query });
+      } else {
+        result = await findLeadsAction({
+          searchContext: searchTerms.join(', '),
+          searchTerms: searchTerms,
+          location: values.location || undefined,
+          industry: values.industry || undefined,
+          employeeCount: values.employeeCount || undefined,
+          techStack: values.techStack || undefined,
+        });
+      }
 
       if (result && 'error' in result) {
         toast({
@@ -196,6 +205,24 @@ export function DiscoverLeadsDialog({ onNewLeads }: DiscoverLeadsDialogProps) {
                       </SelectContent>
                     </Select>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="useGooglePlaces"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Use Google Places Database</FormLabel>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
                   </FormItem>
                 )}
               />

@@ -31,7 +31,7 @@ const prompt = ai.definePrompt({
   input: { schema: z.object({ htmlContent: z.string() }) },
   output: { schema: z.object({ leads: z.array(ExtractedLeadDataSchema) }) },
   prompt: `Analyze the provided cleaned HTML content and identify all individual companies, partners, or customers listed.
-For each entity, extract: author name as 'name', company name as 'companyName', their quote/details as 'details', and their 'website'.
+For each entity, extract: author name as 'name', company name as 'companyName', their quote/details as 'details', their 'website', and any physical 'address' information (including city, state, postalCode, country).
 Ignore the primary company that owns the website.
 
 HTML to analyze:
@@ -90,8 +90,8 @@ const extractMultipleLeadsFromUrlFlow = ai.defineFlow(
       
       const processedLeads = await Promise.all(output.leads.map(async (rawLead) => {
         const enhanced = LeadValidator.enhance(rawLead);
-        const validation = LeadValidator.validate(enhanced);
-        const confidence = AIConfidenceScorer.calculate(enhanced);
+        const validation = await LeadValidator.validate(enhanced);
+        const confidence = await AIConfidenceScorer.calculate(enhanced);
         const compCheck = await compliance.verifyLeadCompliance(enhanced);
 
         return {

@@ -1,9 +1,10 @@
-import { browserPool } from './browser-pool';
 import { requestQueue } from './request-queue';
 import { logger } from './logger';
 import { SecurityUtils } from './security';
-import { RetryManager } from './retry';
+import { RetryStrategy } from './retry-strategy';
+import { complianceManager } from './compliance';
 import { getRandomUserAgent } from './user-agents';
+import * as cheerio from 'cheerio';
 
 export type ScrapedLead = {
   name: string;
@@ -55,71 +56,61 @@ function decodeDdgUrl(href: string): string {
   return href;
 }
 
+function getRequestHeaders(referer?: string): Record<string, string> {
+  return {
+    'User-Agent': getRandomUserAgent(),
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Referer': referer || 'https://www.google.com/',
+  };
+}
+
 /**
- * Perform a DuckDuckGo search using Puppeteer with retry backoff.
+ * Perform a DuckDuckGo search using fetch with retry backoff.
  */
-async function searchDuckDuckGo(query: string, maxResults: number): Promise<{ url: string; title: string; snippet: string }[]> {
+export async function searchDuckDuckGo(query: string, maxResults: number): Promise<{ url: string; title: string; snippet: string }[]> {
   logger.info(`[Scraper] Searching DuckDuckGo for: "${query}"`);
   
   return requestQueue.add(async () => {
-    return RetryManager.withRetry(async () => {
+    return RetryStrategy.withExponentialBackoff(async () => {
       await rateLimiter.wait();
       
-      let browser;
       try {
-        browser = await browserPool.acquire();
-        const page = await browser.newPage();
-        
-        // Set user agent
-        await page.setUserAgent(getRandomUserAgent());
-        
-        // Set longer timeouts
-        page.setDefaultTimeout(30000);
-        
-        // Randomize viewport
-        await page.setViewport({ 
-          width: 1280 + Math.floor(Math.random() * 200), 
-          height: 800 + Math.floor(Math.random() * 200) 
-        });
-
-        // Add random delay to appear more human
-        await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
-
-        // Use the HTML version of DuckDuckGo
         const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-        await page.goto(searchUrl, { 
-          waitUntil: 'domcontentloaded', 
-          timeout: 30000 
+        const response = await fetch(searchUrl, {
+          headers: getRequestHeaders('https://duckduckgo.com/'),
         });
 
-        // Get results with better selectors
-        const results = await page.evaluate(() => {
-          const items: { href: string; title: string; snippet: string }[] = [];
-          const resultElements = document.querySelectorAll('.result');
+        if (!response.ok) {
+          throw new Error(`DuckDuckGo returned status ${response.status}`);
+        }
+
+        const html = await response.text();
+        const $ = cheerio.load(html);
+        
+        const items: { href: string; title: string; snippet: string }[] = [];
+        
+        $('.result').each((i, el) => {
+          const a = $(el).find('.result__a');
+          const snippetEl = $(el).find('.result__snippet');
+          const href = a.attr('href');
           
-          resultElements.forEach((el) => {
-            const a = el.querySelector('.result__a') as HTMLAnchorElement;
-            const snippetEl = el.querySelector('.result__snippet');
-            if (a && a.href) {
-              items.push({
-                href: a.href,
-                title: a.textContent?.trim() || '',
-                snippet: snippetEl?.textContent?.trim() || '',
-              });
-            }
-          });
-          return items;
-        }) as { href: string; title: string; snippet: string }[];
+          if (href) {
+            items.push({
+              href,
+              title: a.text().trim() || '',
+              snippet: snippetEl.text().trim() || '',
+            });
+          }
+        });
 
-        await page.close();
-
-        const parsedResults = results
-          .map((r: { href: string; title: string; snippet: string }) => ({
+        const parsedResults = items
+          .map((r) => ({
             url: decodeDdgUrl(r.href),
             title: r.title,
             snippet: r.snippet
           }))
-          .filter((r: { url: string; title: string; snippet: string }) => 
+          .filter((r) => 
             r.url && 
             !r.url.includes('duckduckgo.com') && 
             !r.url.includes('google.com') &&
@@ -131,12 +122,11 @@ async function searchDuckDuckGo(query: string, maxResults: number): Promise<{ ur
         return parsedResults;
       } catch (error: any) {
         logger.error(`[Scraper] Search failed: ${error.message}`);
-        throw error; // Let RetryManager handle it
+        throw error; // Propagate for RetryStrategy
       }
     }, {
-      maxRetries: 2,
-      baseDelay: 5000,
-      retryableErrors: ['ECONNRESET', 'ETIMEDOUT', 'timeout', 'Navigation failed']
+      maxRetries: 3,
+      baseDelay: 2000,
     });
   });
 }
@@ -150,62 +140,101 @@ export async function crawlWebsite(targetUrl: string): Promise<string> {
     logger.warn(`[Scraper] Blocked crawl attempt for insecure or local URL: ${targetUrl}`);
     return '';
   }
+
+  // Respect robots.txt compliance rules
+  const compliance = await complianceManager.checkRobotsTxt(targetUrl);
+  if (!compliance.allowed) {
+    logger.warn(`[Scraper] Crawl aborted for compliance reasons: ${compliance.reason || 'Robots.txt constraint'}`);
+    return '';
+  }
   
   logger.info(`[Scraper] Starting deep crawl of: ${targetUrl}`);
   
   return requestQueue.add(async () => {
-    let browser;
-    let page;
     try {
-      browser = await browserPool.acquire();
-      page = await browser.newPage();
-      
-      // Set user agent
-      await page.setUserAgent(getRandomUserAgent());
-      
-      await page.setViewport({ width: 1280, height: 800 });
-      page.setDefaultTimeout(20000);
+      // Respect Crawl-Delay if specified in robots.txt
+      if (compliance.crawlDelay && compliance.crawlDelay > 0) {
+        const delayMs = compliance.crawlDelay * 1000;
+        logger.info(`[Scraper] Respecting robots.txt Crawl-Delay. Waiting ${delayMs}ms before fetch...`);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
       // 1. Crawl Homepage
-      await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      const response = await fetch(targetUrl, { 
+        headers: getRequestHeaders(new URL(targetUrl).origin),
+        signal: controller.signal as any
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Target returned status ${response.status}`);
+      }
+
+      const html = await response.text();
+      const $ = cheerio.load(html);
+
+      // Remove script, style, etc. but keep application/ld+json script tags before stripping them
+      const jsonLdScripts = $('script[type="application/ld+json"]')
+        .map((i, el) => $(el).html())
+        .get()
+        .join('\n');
+
+      $('script, style, noscript, iframe, svg, header, footer, nav').remove();
+
+      const text = $('body').text().replace(/\s+/g, ' ').trim();
+      const metaDescription = $('meta[name="description"]').attr('content') || '';
       
-      const pageData = await page.evaluate(() => {
-        const cleanText = (el: HTMLElement) => {
-          const ignoredTags = ['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'SVG', 'HEADER', 'FOOTER', 'NAV'];
-          const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
-          let node;
-          let text = '';
-          while ((node = walk.nextNode())) {
-            if (node.parentElement && !ignoredTags.includes(node.parentElement.tagName)) {
-              text += ' ' + node.textContent;
-            }
-          }
-          return text.replace(/\s+/g, ' ').trim();
-        };
-
-        const metaDescription = document.querySelector('meta[name="description"]')?.getAttribute('content') || '';
-        
-        const jsonLdScripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
-          .map(script => script.textContent)
-          .join('\n');
-
-        const links = Array.from(document.querySelectorAll('a'))
-          .map(a => ({ href: a.href, text: a.textContent?.trim() || '' }))
-          .filter(l => l.href);
-
-        return {
-          text: cleanText(document.body),
-          meta: metaDescription,
-          jsonLd: jsonLdScripts,
-          links
-        };
+      // Structured Data extraction: OpenGraph metadata (Priority 2)
+      const ogTags: Record<string, string> = {};
+      $('meta[property^="og:"]').each((i, el) => {
+        const property = $(el).attr('property');
+        const content = $(el).attr('content');
+        if (property && content) {
+          ogTags[property] = content;
+        }
       });
 
-      let combinedText = `[META DESCRIPTION]\n${pageData.meta}\n\n`;
-      if (pageData.jsonLd) {
-          combinedText += `[STRUCTURED JSON-LD]\n${pageData.jsonLd.substring(0, 5000)}\n\n`;
+      // Extract emails, phones, and social links locally using Cheerio
+      const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+      const phoneRegex = /(?:\+\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g;
+      const emails = Array.from(new Set(text.match(emailRegex) || []));
+      const phones = Array.from(new Set(text.match(phoneRegex) || []));
+
+      const socialLinks: Record<string, string> = {};
+      const links = $('a')
+        .map((i, el) => ({ href: $(el).attr('href'), text: $(el).text().trim() }))
+        .get()
+        .filter(l => l.href && l.href.startsWith('http'));
+
+      links.forEach(l => {
+        if (l.href) {
+          if (l.href.includes('linkedin.com')) socialLinks.linkedin = l.href;
+          if (l.href.includes('twitter.com') || l.href.includes('x.com')) socialLinks.twitter = l.href;
+          if (l.href.includes('facebook.com')) socialLinks.facebook = l.href;
+        }
+      });
+
+      let combinedText = '';
+      if (jsonLdScripts) {
+        combinedText += `[STRUCTURED JSON-LD]\n${jsonLdScripts.substring(0, 8000)}\n\n`;
       }
-      combinedText += `[HOMEPAGE CONTENT]\n${pageData.text}\n\n`;
+      if (Object.keys(ogTags).length > 0) {
+        combinedText += `[OPEN GRAPH METADATA]\n${JSON.stringify(ogTags)}\n\n`;
+      }
+      if (emails.length > 0) {
+        combinedText += `[LOCAL EMAILS FOUND]\n${emails.join(', ')}\n\n`;
+      }
+      if (phones.length > 0) {
+        combinedText += `[LOCAL PHONES FOUND]\n${phones.join(', ')}\n\n`;
+      }
+      if (Object.keys(socialLinks).length > 0) {
+        combinedText += `[SOCIAL LINKS FOUND]\n${JSON.stringify(socialLinks)}\n\n`;
+      }
+      combinedText += `[META DESCRIPTION]\n${metaDescription}\n\n`;
+      combinedText += `[HOMEPAGE CONTENT]\n${text}\n\n`;
 
       // 2. Discover high-yield subpages (About, Contact, Team)
       const targetKeywords = ['about', 'contact', 'team', 'staff'];
@@ -213,9 +242,10 @@ export async function crawlWebsite(targetUrl: string): Promise<string> {
       
       const subpageUrls = Array.from(
         new Set(
-          pageData.links
-            .map((l: { href: string; text: string }) => l.href)
-            .filter((href: string) => {
+          links
+            .map(l => l.href)
+            .filter(href => {
+              if (!href) return false;
               try {
                 const urlObj = new URL(href);
                 if (urlObj.origin !== origin) return false;
@@ -226,25 +256,28 @@ export async function crawlWebsite(targetUrl: string): Promise<string> {
               }
             })
         )
-      ).slice(0, 2); 
+      ).slice(0, 2) as string[]; 
 
       for (const subpageUrl of subpageUrls) {
+        if (!subpageUrl) continue;
         try {
           logger.info(`[Scraper] Crawling subpage: ${subpageUrl}`);
-          await page.goto(subpageUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
-          const subpageText = await page.evaluate(() => {
-            const ignoredTags = ['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'SVG', 'HEADER', 'FOOTER', 'NAV'];
-            const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
-            let node;
-            let text = '';
-            while ((node = walk.nextNode())) {
-              if (node.parentElement && !ignoredTags.includes(node.parentElement.tagName)) {
-                text += ' ' + node.textContent;
-              }
-            }
-            return text.replace(/\s+/g, ' ').trim();
+          const subController = new AbortController();
+          const subTimeout = setTimeout(() => subController.abort(), 10000);
+          
+          const subRes = await fetch(subpageUrl, { 
+            headers: getRequestHeaders(origin),
+            signal: subController.signal as any
           });
-          combinedText += `[SUBPAGE CONTENT: ${subpageUrl}]\n${subpageText}\n\n`;
+          clearTimeout(subTimeout);
+
+          if (subRes.ok) {
+            const subHtml = await subRes.text();
+            const $sub = cheerio.load(subHtml);
+            $sub('script, style, noscript, iframe, svg, header, footer, nav').remove();
+            const subpageText = $sub('body').text().replace(/\s+/g, ' ').trim();
+            combinedText += `[SUBPAGE CONTENT: ${subpageUrl}]\n${subpageText}\n\n`;
+          }
         } catch (e: any) {
           logger.warn(`[Scraper] Failed to crawl subpage ${subpageUrl}: ${e.message}`);
         }
@@ -254,14 +287,9 @@ export async function crawlWebsite(targetUrl: string): Promise<string> {
     } catch (error: any) {
       logger.error(`[Scraper] Crawler failed for ${targetUrl}: ${error.message}`);
       return '';
-    } finally {
-      if (page) {
-        try {
-          await page.close();
-        } catch (e) {}
-      }
     }
   });
+
 }
 
 /**

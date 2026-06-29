@@ -14,6 +14,14 @@ export const CompanySchema = z.object({
   techStack: z.array(z.string()).optional(),
   intentSignals: z.array(z.string()).optional(),
   website: z.string().optional(),
+  address: z.object({
+    street: z.string().optional(),
+    city: z.string().optional(),
+    state: z.string().optional(),
+    postalCode: z.string().optional(),
+    country: z.string().optional(),
+    formatted: z.string().optional(),
+  }).optional(),
 });
 export type Company = z.infer<typeof CompanySchema>;
 
@@ -23,7 +31,7 @@ export const LeadSchema = z.object({
   name: z.string(),
   title: z.string().optional(),
   company: CompanySchema,
-  email: z.string().email(),
+  email: z.string().optional(),
   phone: z.string().optional(),
   status: z.enum(['New', 'Contacted', 'Qualified', 'Lost']),
   quality: z.number(),
@@ -55,12 +63,17 @@ export const ExtractedLeadDataSchema = z.object({
   name: z.string().optional().describe("Potential contact person."),
   title: z.string().optional().describe("Job title."),
   companyName: z.string().optional().describe("Company name."),
-  email: z.string().email().optional().describe("Contact email."),
+  email: z.string().optional().describe("Contact email."),
   phone: z.string().optional().describe("Contact phone."),
-  website: z.string().url().optional().describe("Website URL."),
+  website: z.string().optional().describe("Website URL."),
   details: z.string().optional().describe("Relevant details."),
   evidence: z.record(z.string()).optional().describe("Where data was found in HTML."),
   detectedTech: z.array(z.string()).optional().describe("Tech identified (e.g. Shopify)."),
+  address: z.string().optional().describe("Physical/business street address."),
+  city: z.string().optional().describe("City."),
+  state: z.string().optional().describe("State or province."),
+  postalCode: z.string().optional().describe("Postal or ZIP code."),
+  country: z.string().optional().describe("Country."),
 });
 export type ExtractedLeadData = z.infer<typeof ExtractedLeadDataSchema>;
 

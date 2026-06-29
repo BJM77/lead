@@ -46,7 +46,7 @@ const prompt = ai.definePrompt({
   input: { schema: AnalyzeImageForLeadInputSchema },
   output: { schema: ExtractedLeadDataSchema.optional() },
   prompt: `You are an expert at analyzing images of advertisements, business cards, and social media posts to extract lead information.
-Analyze the provided image and extract the following information if available: contact person's full name, job title, company name, email, phone number, and website.
+Analyze the provided image and extract the following information if available: contact person's full name, job title, company name, email, phone number, website, and physical/business address (including city, state, postal code, and country).
 Also provide any other relevant context or details you can infer from the image. If a piece of information is not present, omit the corresponding field.
 If the image does not appear to contain any relevant lead information, respond with an empty object.
 

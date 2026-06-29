@@ -6,14 +6,16 @@ import { columns } from '@/components/lead-columns';
 import type { Lead } from '@/types';
 import { DiscoverLeadsDialog } from '@/components/discover-leads-dialog';
 import { AnalyticsCard } from '@/components/analytics-card';
-import { Target, Users, Zap, BarChart, Loader2, UserCircle, TrendingUp, ShieldCheck } from 'lucide-react';
+import { Target, Users, Zap, BarChart, Loader2, UserCircle, TrendingUp, ShieldCheck, CheckCircle } from 'lucide-react';
 import { LeadAnalyticsCharts } from '@/components/lead-analytics-charts';
 import { listenToLeads } from '@/lib/db';
 import { auth } from '@/lib/firebase';
 import { User } from 'firebase/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-type LeadFilter = 'all' | 'highQuality' | 'converted' | 'newThisMonth';
+import { calculateCompleteness } from '@/lib/completeness';
+
+type LeadFilter = 'all' | 'highQuality' | 'converted' | 'newThisMonth' | 'complete';
 
 export default function DashboardPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -45,6 +47,11 @@ export default function DashboardPage() {
     [leads]
   );
   
+  const completeLeadsCount = useMemo(
+    () => leads.filter((l) => calculateCompleteness(l).score === 100).length,
+    [leads]
+  );
+  
   const averageConfidence = useMemo(() => {
     if (leads.length === 0) return 0;
     const total = leads.reduce((acc, lead) => acc + (lead.confidenceScore || 0), 0);
@@ -61,6 +68,8 @@ export default function DashboardPage() {
         const today = new Date();
         const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).getTime();
         return leads.filter(l => l.createdAt >= firstDayOfMonth);
+      case 'complete':
+        return leads.filter((l) => calculateCompleteness(l).score === 100);
       case 'all':
       default:
         return leads;
@@ -83,7 +92,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
           <AnalyticsCard
             title="Total Prospects"
             value={loading ? '...' : leads.length.toString()}
@@ -113,6 +122,14 @@ export default function DashboardPage() {
             description="Verified leads qualified for outreach."
             onClick={() => setActiveFilter('converted')}
             isActive={activeFilter === 'converted'}
+          />
+          <AnalyticsCard
+            title="Complete Data"
+            value={loading ? '...' : `${completeLeadsCount}`}
+            icon={CheckCircle}
+            description="Leads with all 5 required fields."
+            onClick={() => setActiveFilter('complete')}
+            isActive={activeFilter === 'complete'}
           />
         </div>
 

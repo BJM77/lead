@@ -5,7 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Loader2, Wand2, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { createLeadFromFormAction, extractLeadFromUrlAction } from '@/app/actions';
+import { 
+  createLeadFromFormAction, 
+  extractLeadFromUrlAction, 
+  createJobAction, 
+  getJobProgressAction 
+} from '@/app/actions';
 import type { NewLead, ExtractedLeadData } from '@/types';
 import { LeadVerificationForm } from '@/components/lead-verification-form';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +20,7 @@ function CaptureContent() {
   const searchParams = useSearchParams();
   const [url, setUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [progressMessage, setProgressMessage] = useState<string | null>(null);
   const [extractedData, setExtractedData] = useState<ExtractedLeadData | null>(null);
   const [analysisMessage, setAnalysisMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -40,8 +46,30 @@ function CaptureContent() {
     setIsLoading(true);
     setExtractedData(null);
     setAnalysisMessage(null);
+    setProgressMessage('Initializing...');
+
+    let intervalId: any = null;
     try {
-      const result = await extractLeadFromUrlAction({ url });
+      // 1. Create in-memory job via server action
+      const jobId = await createJobAction();
+      if (jobId && typeof jobId === 'object' && 'error' in jobId) {
+        throw new Error((jobId as any).error);
+      }
+
+      // 2. Poll progress state every 1.5 seconds
+      intervalId = setInterval(async () => {
+        try {
+          const progress = await getJobProgressAction(jobId);
+          if (progress && 'message' in progress) {
+            setProgressMessage(progress.message);
+          }
+        } catch (e) {
+          // Ignore polling errors
+        }
+      }, 1500);
+
+      // 3. Trigger extraction server action with the jobId
+      const result = await extractLeadFromUrlAction({ url, jobId });
       if (result && 'error' in result) {
         toast({ title: 'Analysis Failed', description: result.error, variant: 'destructive' });
         return;
@@ -70,7 +98,11 @@ function CaptureContent() {
         variant: 'destructive',
       });
     } finally {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
       setIsLoading(false);
+      setProgressMessage(null);
     }
   };
   
@@ -148,6 +180,12 @@ function CaptureContent() {
                         disabled={!!extractedData}
                     />
                 </div>
+                {progressMessage && (
+                  <div className="flex items-center gap-3 rounded-lg border bg-muted p-3 text-sm text-muted-foreground animate-pulse">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <span>{progressMessage}</span>
+                  </div>
+                )}
               </CardContent>
               <CardFooter className="flex-col gap-4">
                  <Button 

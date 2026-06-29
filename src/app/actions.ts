@@ -104,6 +104,24 @@ export async function analyzeImageForLeadAction(input: any) {
   }
 }
 
+export async function createJobAction() {
+  try {
+    const { createInMemoryJob } = await import('@/lib/job-store');
+    return createInMemoryJob();
+  } catch (error) {
+    return handleActionError(error, 'createJobAction');
+  }
+}
+
+export async function getJobProgressAction(jobId: string) {
+  try {
+    const { getInMemoryJob } = await import('@/lib/job-store');
+    return getInMemoryJob(jobId);
+  } catch (error) {
+    return handleActionError(error, 'getJobProgressAction');
+  }
+}
+
 export async function extractLeadFromUrlAction(input: any) {
   try {
     if (input.url && !SecurityUtils.validateUrl(input.url)) {
@@ -149,3 +167,16 @@ export async function discoverUrlsAction(input: any) {
     return handleActionError(error, 'discoverUrlsAction');
   }
 }
+
+export async function findLeadsByPlaceAction(input: { query: string }) {
+  try {
+    const sanitizedInput = {
+      query: SecurityUtils.sanitizePromptInput(input.query)
+    };
+    const { findLeadsByPlace } = await import('@/ai/flows/find-leads-by-place');
+    return await withTimeout(() => findLeadsByPlace(sanitizedInput), 60000, 'findLeadsByPlace');
+  } catch (error) {
+    return handleActionError(error, 'findLeadsByPlaceAction');
+  }
+}
+

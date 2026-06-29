@@ -8,6 +8,8 @@ import { z } from 'genkit';
 import { logger } from '@/lib/logger';
 import { DiscoveredUrlSchema, type DiscoveredUrl } from '@/types';
 
+import { searchDuckDuckGo } from '@/lib/scraper';
+
 const DiscoverUrlsInputSchema = z.object({
   query: z.string().describe("The search query or keyword to find target URLs."),
   limit: z.number().default(10),
@@ -44,50 +46,77 @@ const discoverUrlsFlow = ai.defineFlow(
   async (input) => {
     logger.info(`[URL Discovery] Running discovery for query: ${input.query}`);
 
-    let prompt = `You are a search intelligence bot. The user is looking for URLs that match a specific search pattern: "${input.query}".
+    const requestLimit = Math.max(input.limit * 2, 60);
+    const hasDorking = /inurl:|intitle:|site:|filetype:/i.test(input.query);
+    let finalQuery = input.query;
     
-    CRITICAL: Only return domains and businesses that are located in Australia. All candidate URLs must belong to Australian companies, organizations, or Australian branches (preferring .com.au, .net.au, .org.au, .edu.au or other domains clearly operating in and targetting the Australian market).
-    
-    Based on your internal knowledge, provide a list of {{limit}} unique candidate URLs for real businesses in Australia that likely match this pattern.
-    Focus on well-known or verifiable corporate domains that would have such pages.`;
-
-    if (input.excludeUrls && input.excludeUrls.length > 0) {
-      // Exclude list is added to prompt instruction so LLM does not regenerate the same ones
-      prompt += `\n\nCRITICAL: DO NOT include any of the following URLs or domains in your output (exclude them completely):
-${input.excludeUrls.slice(0, 100).map(u => `- ${u}`).join('\n')}`;
+    // If not a dorking query, we can try to be more specific to Australia 
+    // depending on the input, but we'll leave the query as is if it looks deliberate.
+    if (!hasDorking && !/australia|au/i.test(input.query)) {
+        finalQuery = `${input.query} Australia`;
     }
 
-    prompt += `\n\nFor each URL, provide:
-    1. The URL of the specific page.
-    2. A descriptive title for the business/page.
-    3. A brief snippet of what a user would see on that page.
-    4. A relevance score from 0-100.`;
+    let searchResults: { url: string; title: string; snippet: string }[] = [];
+    try {
+        searchResults = await searchDuckDuckGo(finalQuery, requestLimit);
+    } catch (e: any) {
+        logger.error(`[URL Discovery] DuckDuckGo search failed: ${e.message}`);
+    }
 
-    // Request more than the limit to allow room for filtering duplicates
-    const requestLimit = Math.max(input.limit * 2, 60);
-
-    const { output } = await ai.generate({
-      prompt: prompt.replace('{{limit}}', requestLimit.toString()),
-      output: { schema: z.object({ urls: z.array(DiscoveredUrlSchema) }) }
-    });
-
-    const rawUrls = output?.urls || [];
-    
     const excludeSet = new Set((input.excludeUrls || []).map(u => normalizeUrl(u)));
-
-    // Internal deduplication of AI results and database exclusions
     const seen = new Set<string>();
     const uniqueUrls: DiscoveredUrl[] = [];
 
-    for (const item of rawUrls) {
+    for (const item of searchResults) {
       const normalized = normalizeUrl(item.url);
       if (!seen.has(normalized) && !excludeSet.has(normalized)) {
         seen.add(normalized);
-        uniqueUrls.push(item);
+        uniqueUrls.push({
+          url: item.url,
+          title: item.title || 'Untitled Page',
+          snippet: item.snippet || 'No snippet available.',
+          relevanceScore: 90, // Baseline for a real search result
+        });
       }
     }
 
-    const finalUrls = uniqueUrls.slice(0, input.limit);
+    let finalUrls = uniqueUrls.slice(0, input.limit);
+
+    // Fallback to AI generation if DuckDuckGo returns nothing and it's not a dorking query
+    if (finalUrls.length === 0 && !hasDorking) {
+        logger.info(`[URL Discovery] Search engine returned no results. Falling back to AI knowledge.`);
+        let prompt = `You are a search intelligence bot. The user is looking for URLs that match a specific search pattern: "${input.query}".
+        
+        CRITICAL: Only return domains and businesses that are located in Australia. All candidate URLs must belong to Australian companies, organizations, or Australian branches.
+        
+        Based on your internal knowledge, provide a list of ${requestLimit} unique candidate URLs for real businesses in Australia that likely match this pattern.
+        Focus on well-known or verifiable corporate domains that would have such pages.`;
+
+        if (input.excludeUrls && input.excludeUrls.length > 0) {
+          prompt += `\n\nCRITICAL: DO NOT include any of the following URLs or domains in your output (exclude them completely):\n${input.excludeUrls.slice(0, 100).map(u => `- ${u}`).join('\n')}`;
+        }
+
+        prompt += `\n\nFor each URL, provide:
+        1. The URL of the specific page.
+        2. A descriptive title for the business/page.
+        3. A brief snippet of what a user would see on that page.
+        4. A relevance score from 0-100.`;
+
+        const { output } = await ai.generate({
+          prompt,
+          output: { schema: z.object({ urls: z.array(DiscoveredUrlSchema) }) }
+        });
+
+        const rawUrls = output?.urls || [];
+        for (const item of rawUrls) {
+          const normalized = normalizeUrl(item.url);
+          if (!seen.has(normalized) && !excludeSet.has(normalized)) {
+            seen.add(normalized);
+            uniqueUrls.push(item);
+          }
+        }
+        finalUrls = uniqueUrls.slice(0, input.limit);
+    }
 
     return {
       urls: finalUrls,

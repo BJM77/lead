@@ -11,9 +11,11 @@ export const metadata: Metadata = {
 };
 
 import { validateEnvironment } from '@/lib/startup-check';
+import '@/lib/cleanup';
 
 // Run environmental and Puppeteer diagnostics on start
 validateEnvironment().catch(err => console.error('Startup check failed:', err));
+
 
 export default function RootLayout({
   children,

@@ -1,6 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   /* config options here */
+  experimental: {
+    optimizePackageImports: [
+      'lucide-react',
+      '@radix-ui/react-icons',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-slot',
+    ],
+  },
+
   typescript: {
     ignoreBuildErrors: false,
   },
