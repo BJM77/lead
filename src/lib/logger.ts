@@ -25,6 +25,17 @@ const db = getFirestore(app);
 const logsCollection = collection(db, 'logs');
 const MAX_LOGS = 200;
 
+// In-memory store for server-side logs
+const serverLogs: LogEntry[] = [];
+
+export function getServerLogs(): LogEntry[] {
+  return [...serverLogs].sort((a, b) => b.timestamp - a.timestamp);
+}
+
+export function clearServerLogs(): void {
+  serverLogs.length = 0;
+}
+
 class Logger {
   async addLog(level: LogLevel, message: string) {
     // Log to the server console for immediate visibility during development
@@ -32,6 +43,15 @@ class Logger {
     
     // Only attempt Firestore logging on the client side to avoid PERMISSION_DENIED on the server
     if (typeof window === 'undefined') {
+      serverLogs.push({
+        id: `server-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: Date.now(),
+        level,
+        message,
+      });
+      if (serverLogs.length > MAX_LOGS) {
+        serverLogs.shift();
+      }
       return;
     }
     

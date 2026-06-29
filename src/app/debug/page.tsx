@@ -14,10 +14,35 @@ export default function DebugPage() {
   const { toast } = useToast();
 
   useEffect(() => {
+    let clientLogs: LogEntry[] = [];
+    let intervalId: NodeJS.Timeout;
+
+    const fetchServerLogs = async () => {
+      try {
+        const response = await fetch('/api/logs');
+        if (response.ok) {
+          const serverLogs = await response.json();
+          // Merge and sort
+          const merged = [...clientLogs, ...serverLogs].sort((a, b) => b.timestamp - a.timestamp);
+          setLogs(merged);
+        }
+      } catch (err) {
+        console.error('Failed to fetch server logs', err);
+      }
+    };
+
     const unsubscribe = logger.listenToLogs((newLogs) => {
-      setLogs(newLogs); 
+      clientLogs = newLogs;
+      // Trigger a fetch to immediately merge
+      fetchServerLogs();
     });
-    return () => unsubscribe();
+
+    intervalId = setInterval(fetchServerLogs, 2000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(intervalId);
+    };
   }, []);
 
   const handleCopyLogs = () => {
@@ -37,6 +62,8 @@ export default function DebugPage() {
   const handleClearLogs = async () => {
     try {
       await logger.clearLogs();
+      await fetch('/api/logs', { method: 'DELETE' });
+      setLogs([]); // instantly clear UI
       toast({
         title: 'Logs Cleared',
         description: 'The server logs have been cleared.',
