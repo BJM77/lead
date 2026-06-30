@@ -21,7 +21,10 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     console.log('[Orchestrator] Initializing session listener...');
     
     // Primary Firebase Observer
-    if (!auth) return;
+    if (!auth) {
+      setIsInitializing(false);
+      return;
+    }
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       console.log(`[Orchestrator] Session Status Update: ${currentUser ? 'AUTHENTICATED (' + currentUser.email + ')' : 'ANONYMOUS'}`);
       setUser(currentUser);
