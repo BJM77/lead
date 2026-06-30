@@ -26,7 +26,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Wand2 } from 'lucide-react';
+import { Wand2, Clock } from 'lucide-react';
 
 const formSchema = z.object({
   companyName: z.string().min(1, 'Company name is required.'),
@@ -50,6 +50,7 @@ type LeadVerificationFormProps = {
   analysisMessage: string | null;
   isDisabled: boolean;
   sourceType: NewLead['source'];
+  autoSubmitAfterSeconds?: number;
 };
 
 export function LeadVerificationForm({
@@ -59,7 +60,10 @@ export function LeadVerificationForm({
   analysisMessage,
   isDisabled,
   sourceType,
+  autoSubmitAfterSeconds,
 }: LeadVerificationFormProps) {
+  const [secondsLeft, setSecondsLeft] = React.useState<number | null>(null);
+  const timerRef = React.useRef<NodeJS.Timeout | null>(null);
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -78,6 +82,8 @@ export function LeadVerificationForm({
     },
   });
 
+  const { isDirty } = form.formState;
+
   React.useEffect(() => {
     if (initialData) {
       form.reset({
@@ -94,8 +100,43 @@ export function LeadVerificationForm({
         postalCode: initialData.postalCode || '',
         country: initialData.country || '',
       });
+
+      if (autoSubmitAfterSeconds) {
+        setSecondsLeft(autoSubmitAfterSeconds);
+      }
     }
-  }, [initialData, form]);
+  }, [initialData, form, autoSubmitAfterSeconds]);
+
+  // Handle countdown interval
+  React.useEffect(() => {
+    if (secondsLeft === null) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      return;
+    }
+
+    if (secondsLeft <= 0) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      form.handleSubmit(handleFormSubmit)();
+      setSecondsLeft(null);
+      return;
+    }
+
+    timerRef.current = setInterval(() => {
+      setSecondsLeft((prev) => (prev !== null ? prev - 1 : null));
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [secondsLeft]);
+
+  // Cancel autosave if user starts editing the form
+  React.useEffect(() => {
+    if (isDirty && secondsLeft !== null) {
+      setSecondsLeft(null);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  }, [isDirty, secondsLeft]);
 
   const handleFormSubmit = (values: z.infer<typeof formSchema>) => {
     const newLead: Omit<NewLead, 'userId' | 'createdAt'> = {
@@ -135,6 +176,29 @@ export function LeadVerificationForm({
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleFormSubmit)}>
           <CardContent className="grid gap-4">
+            {secondsLeft !== null && (
+              <Alert className="border-primary bg-primary/5 text-primary flex justify-between items-center py-2 px-3">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 animate-pulse shrink-0 text-primary" />
+                  <div className="flex flex-col">
+                    <AlertTitle className="text-xs font-semibold leading-normal">Auto-saving Lead</AlertTitle>
+                    <AlertDescription className="text-[11px] text-muted-foreground leading-normal">
+                      Saving automatically in <span className="font-bold text-primary">{secondsLeft}s</span>. Editing fields will cancel this countdown.
+                    </AlertDescription>
+                  </div>
+                </div>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setSecondsLeft(null)}
+                  className="h-7 text-[10px] border-primary/30 hover:bg-primary/10 hover:text-primary transition-all shrink-0"
+                >
+                  Cancel Auto-Save
+                </Button>
+              </Alert>
+            )}
+
             {analysisMessage && (
                <Alert>
                   <Wand2 className="h-4 w-4" />

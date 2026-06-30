@@ -6,13 +6,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Search, ExternalLink, ScanSearch, Info, AlertTriangle, CheckCircle, SlidersHorizontal, Sparkles, HelpCircle } from 'lucide-react';
-import { discoverUrlsAction } from '@/app/actions';
-import { type DiscoveredUrl } from '@/types';
+import { 
+  discoverUrlsAction, 
+  createJobAction, 
+  getJobProgressAction, 
+  extractLeadFromUrlAction,
+  createLeadFromFormAction
+} from '@/app/actions';
+import { type DiscoveredUrl, type NewLead, type ExtractedLeadData } from '@/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
 import { getLeads } from '@/lib/db';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { LeadVerificationForm } from '@/components/lead-verification-form';
 
 const PRESETS = [
   {
@@ -69,7 +83,103 @@ export default function DiscoverUrlsPage() {
   const [inTitleInput, setInTitleInput] = useState('shipping information, delivery information');
   const [siteInput, setSiteInput] = useState('');
   const [generalKeywords, setGeneralKeywords] = useState('');
+  // Popup Capture States
+  const [activeCaptureUrl, setActiveCaptureUrl] = useState<string | null>(null);
+  const [isPopupOpen, setIsPopupOpen] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState<string | null>(null);
+  const [extractedLead, setExtractedLead] = useState<ExtractedLeadData | null>(null);
+  const [analysisReport, setAnalysisReport] = useState<string | null>(null);
+  const [isSavingLead, setIsSavingLead] = useState(false);
 
+  const startAnalysis = async (url: string) => {
+    setActiveCaptureUrl(url);
+    setIsPopupOpen(true);
+    setIsAnalyzing(true);
+    setExtractedLead(null);
+    setAnalysisReport(null);
+    setAnalysisProgress('Initializing analysis...');
+
+    let intervalId: any = null;
+    try {
+      const jobId = await createJobAction();
+      if (jobId && typeof jobId === 'object' && 'error' in jobId) {
+        throw new Error((jobId as any).error);
+      }
+
+      intervalId = setInterval(async () => {
+        try {
+          const progress = await getJobProgressAction(jobId);
+          if (progress && 'message' in progress) {
+            setAnalysisProgress(progress.message);
+          }
+        } catch (e) {}
+      }, 1500);
+
+      const result = await extractLeadFromUrlAction({ url, jobId });
+      if (result && 'error' in result) {
+        toast({ title: 'Analysis Failed', description: result.error, variant: 'destructive' });
+        setIsAnalyzing(false);
+        return;
+      }
+
+      setAnalysisReport(result.message);
+      if (result.extractedData) {
+        setExtractedLead(result.extractedData);
+        toast({ title: 'Analysis Successful', description: 'Intelligent extraction completed.' });
+      } else {
+        toast({ title: 'Analysis Failed', description: result.message, variant: 'destructive' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      if (intervalId) clearInterval(intervalId);
+      setIsAnalyzing(false);
+      setAnalysisProgress(null);
+    }
+  };
+
+  const handleSaveLeadInPopup = async (formData: Omit<NewLead, 'userId' | 'createdAt'>) => {
+    setIsSavingLead(true);
+    const userId = (await import('@/lib/firebase')).auth?.currentUser?.uid;
+    if (!userId) {
+      toast({ title: 'Authentication Error', description: 'You must be logged in to save leads.', variant: 'destructive' });
+      setIsSavingLead(false);
+      return;
+    }
+
+    try {
+      const finalFormData = {
+        ...formData,
+        details: `${formData.details || ''}\n\nSource URL: ${activeCaptureUrl}`,
+        source: "Web Page Capture" as const,
+        sourceUrl: activeCaptureUrl || undefined,
+      };
+      
+      const result = await createLeadFromFormAction(finalFormData);
+      if (result && 'error' in result) {
+        toast({ title: 'Failed to Save Lead', description: result.error, variant: 'destructive' });
+        setIsSavingLead(false);
+        return;
+      }
+      await (await import('@/lib/db')).createLead(result.enrichedLead, userId);
+      toast({ title: 'Lead Saved!', description: result.message });
+      
+      if (activeCaptureUrl) {
+        setExistingLeadUrls(prev => {
+          const next = new Set(prev);
+          next.add(normalizeUrl(activeCaptureUrl));
+          return next;
+        });
+      }
+      
+      setIsPopupOpen(false);
+    } catch (error: any) {
+      toast({ title: 'Failed to Save Lead', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsSavingLead(false);
+    }
+  };
   const { toast } = useToast();
   const router = useRouter();
 
@@ -348,9 +458,14 @@ export default function DiscoverUrlsPage() {
                   <div className="divide-y divide-border">
                     {urls.map((item, index) => (
                       <div key={index} className="p-4 hover:bg-muted/20 transition-colors flex items-start justify-between gap-4">
-                        <div className="space-y-1">
+                        <div className="space-y-1 flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-sm">{item.title}</span>
+                            <button 
+                              onClick={() => startAnalysis(item.url)}
+                              className="font-bold text-sm hover:underline hover:text-primary text-left"
+                            >
+                              {item.title}
+                            </button>
                             <Badge variant="secondary" className="text-[10px] h-4">
                               Score: {item.relevanceScore}%
                             </Badge>
@@ -359,16 +474,19 @@ export default function DiscoverUrlsPage() {
                           <p className="text-xs text-muted-foreground leading-relaxed">{item.snippet}</p>
                         </div>
                         <div className="flex flex-col gap-2 shrink-0">
-                          <a href={item.url} target="_blank" rel="noopener noreferrer">
-                            <Button variant="outline" size="sm" className="w-full text-[11px] h-8">
-                              <ExternalLink className="mr-1 h-3 w-3" /> View Page
-                            </Button>
-                          </a>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="w-full text-[11px] h-8"
+                            onClick={() => window.open(item.url, '_blank', 'width=1000,height=800,menubar=no,toolbar=no,location=yes,status=yes,scrollbars=yes')}
+                          >
+                            <ExternalLink className="mr-1 h-3 w-3" /> View Page
+                          </Button>
                           <Button 
                             size="sm" 
                             variant="default"
                             className="w-full text-[11px] h-8" 
-                            onClick={() => handleCapture(item.url)}
+                            onClick={() => startAnalysis(item.url)}
                           >
                             <ScanSearch className="mr-1 h-3 w-3" /> Analyze & Capture
                           </Button>
@@ -382,6 +500,49 @@ export default function DiscoverUrlsPage() {
           )}
         </div>
       </div>
+
+      <Dialog open={isPopupOpen} onOpenChange={(open) => {
+        setIsPopupOpen(open);
+        if (!open) {
+          setExtractedLead(null);
+          setAnalysisReport(null);
+        }
+      }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Analyze & Capture Lead</DialogTitle>
+            <DialogDescription className="font-mono text-xs text-primary truncate">
+              Target: {activeCaptureUrl}
+            </DialogDescription>
+          </DialogHeader>
+
+          {isAnalyzing && (
+            <div className="flex flex-col items-center justify-center p-12 space-y-4">
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+              <div className="text-center">
+                <p className="font-semibold text-sm">Analyzing page content...</p>
+                {analysisProgress && (
+                  <p className="text-xs text-muted-foreground mt-1 animate-pulse">{analysisProgress}</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!isAnalyzing && extractedLead && (
+            <div className="mt-4">
+              <LeadVerificationForm
+                initialData={extractedLead}
+                onSubmit={handleSaveLeadInPopup}
+                isSaving={isSavingLead}
+                analysisMessage={analysisReport}
+                isDisabled={false}
+                sourceType="Web Page Capture"
+                autoSubmitAfterSeconds={10}
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
