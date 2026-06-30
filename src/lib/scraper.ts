@@ -89,7 +89,8 @@ export async function performWebSearch(query: string, maxResults: number): Promi
           });
           
           if (!response.ok) {
-            throw new Error(`Serper API returned status ${response.status}`);
+            const errText = await response.text();
+            throw new Error(`Serper API returned status ${response.status}: ${errText}`);
           }
           
           const data = await response.json();
