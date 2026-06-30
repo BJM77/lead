@@ -109,22 +109,25 @@ export default function DebugPage() {
           </CardHeader>
           <CardContent className="flex-1 p-0">
             <ScrollArea className="h-[60vh] p-6 pt-0">
-              <pre className="text-sm bg-muted/50 p-4 rounded-lg">
+              <pre className="text-sm bg-muted/50 p-4 rounded-lg overflow-x-auto whitespace-pre-wrap break-words font-mono">
                 <code
                   dangerouslySetInnerHTML={{
                     __html: logs.length > 0
                       ? logs
                           .map(
-                            (log) =>
-                              `<span class="${
+                            (log) => {
+                              const escapedMessage = log.message
+                                .replace(/&/g, '&amp;')
+                                .replace(/</g, '&lt;')
+                                .replace(/>/g, '&gt;');
+                              return `<span class="${
                                 log.level === 'error'
                                   ? 'text-destructive'
                                   : 'text-muted-foreground'
                               }">[${new Date(
                                 log.timestamp
-                              ).toLocaleTimeString()}]</span> <span class="font-semibold">[${log.level.toUpperCase()}]</span> ${
-                                log.message
-                              }`
+                              ).toLocaleTimeString()}]</span> <span class="font-semibold">[${log.level.toUpperCase()}]</span> ${escapedMessage}`;
+                            }
                           )
                           .join('\n\n')
                       : 'No logs yet. Perform an action like "Discover New Leads" to generate logs.'
