@@ -14,12 +14,26 @@ import {
 import { auth, db } from './firebase';
 import type { Lead, NewLead } from '@/types';
 
-const leadsCollection = collection(db, 'leads');
+function getLeadsCollection() {
+  if (!db) {
+    throw new Error("Firestore database is not initialized. Verify your Firebase configuration.");
+  }
+  return collection(db, 'leads');
+}
+
+function getJobsCollection() {
+  if (!db) {
+    throw new Error("Firestore database is not initialized. Verify your Firebase configuration.");
+  }
+  return collection(db, 'jobs');
+}
 
 // Create a new lead
 export async function createLead(leadData: Omit<NewLead, 'userId' | 'createdAt'>, explicitUserId?: string): Promise<Lead> {
-  const userId = explicitUserId || auth.currentUser?.uid;
+  const userId = explicitUserId || auth?.currentUser?.uid;
   if (!userId) throw new Error("Operator authentication missing.");
+
+  const leadsCollection = getLeadsCollection();
 
   // Deduplication check by website
   if (leadData.company?.website) {
@@ -52,9 +66,10 @@ export async function createLead(leadData: Omit<NewLead, 'userId' | 'createdAt'>
 
 // Get all leads for the current user
 export async function getLeads(): Promise<Lead[]> {
-  const userId = auth.currentUser?.uid;
+  const userId = auth?.currentUser?.uid;
   if (!userId) return [];
   
+  const leadsCollection = getLeadsCollection();
   const q = query(leadsCollection, where("userId", "==", userId));
   const snapshot = await getDocs(q);
   return snapshot.docs.map(
@@ -64,7 +79,7 @@ export async function getLeads(): Promise<Lead[]> {
 
 // Reactive lead listener with session persistence
 export function listenToLeads(callback: (leads: Lead[]) => void): () => void {
-  const userId = auth.currentUser?.uid;
+  const userId = auth?.currentUser?.uid;
   
   if (!userId) {
       console.warn("[DB] No active operator session detected for sync.");
@@ -72,25 +87,33 @@ export function listenToLeads(callback: (leads: Lead[]) => void): () => void {
       return () => {};
   }
 
-  const q = query(leadsCollection, where("userId", "==", userId));
-  const unsubscribe = onSnapshot(q, (querySnapshot) => {
-    const leads = querySnapshot.docs.map(
-      (d) => ({ id: d.id, ...d.data() } as Lead)
-    );
-    console.log(`[DB] Sync complete. ${leads.length} tactical targets retrieved.`);
-    callback(leads);
-  }, (error) => {
-      console.error("[DB] Intelligence sync error:", error);
-      callback([]);
-  });
-  return unsubscribe;
+  try {
+    const leadsCollection = getLeadsCollection();
+    const q = query(leadsCollection, where("userId", "==", userId));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const leads = querySnapshot.docs.map(
+        (d) => ({ id: d.id, ...d.data() } as Lead)
+      );
+      console.log(`[DB] Sync complete. ${leads.length} tactical targets retrieved.`);
+      callback(leads);
+    }, (error) => {
+        console.error("[DB] Intelligence sync error:", error);
+        callback([]);
+    });
+    return unsubscribe;
+  } catch (err) {
+    console.error("[DB] Failed to sync leads:", err);
+    callback([]);
+    return () => {};
+  }
 }
 
 // Delete a lead with ownership validation
 export async function deleteLead(leadId: string): Promise<void> {
-  const userId = auth.currentUser?.uid;
+  const userId = auth?.currentUser?.uid;
   if (!userId) throw new Error("Operator authentication required.");
 
+  if (!db) throw new Error("Firestore database is not initialized.");
   const leadDocRef = doc(db, 'leads', leadId);
   const leadDoc = await getDoc(leadDocRef);
 
@@ -106,9 +129,10 @@ export async function updateLeadOutcome(
   leadId: string,
   outcome: 'converted' | 'lost' | 'unresponsive'
 ): Promise<{ success: boolean }> {
-    const userId = auth.currentUser?.uid;
+    const userId = auth?.currentUser?.uid;
     if (!userId) throw new Error("Operator authentication required.");
 
+    if (!db) throw new Error("Firestore database is not initialized.");
     const leadDocRef = doc(db, 'leads', leadId);
     const leadDoc = await getDoc(leadDocRef);
     if (!leadDoc.exists() || leadDoc.data().userId !== userId) {
@@ -120,12 +144,11 @@ export async function updateLeadOutcome(
 }
 
 // Jobs
-const jobsCollection = collection(db, 'jobs');
-
 export async function createJob(type: string): Promise<string> {
-  const userId = auth.currentUser?.uid;
+  const userId = auth?.currentUser?.uid;
   if (!userId) throw new Error("Operator authentication required for jobs.");
 
+  const jobsCollection = getJobsCollection();
   const docRef = await addDoc(jobsCollection, {
     userId,
     status: 'pending',
@@ -139,6 +162,7 @@ export async function createJob(type: string): Promise<string> {
 }
 
 export async function updateJobProgress(jobId: string, updates: { status?: 'pending' | 'processing' | 'completed' | 'failed'; progress?: number; message?: string; error?: string }) {
+  if (!db) throw new Error("Firestore database is not initialized.");
   const jobDocRef = doc(db, 'jobs', jobId);
   await updateDoc(jobDocRef, {
     ...updates,
@@ -147,23 +171,30 @@ export async function updateJobProgress(jobId: string, updates: { status?: 'pend
 }
 
 export function listenToJobs(callback: (jobs: any[]) => void): () => void {
-  const userId = auth.currentUser?.uid;
+  const userId = auth?.currentUser?.uid;
   if (!userId) {
       callback([]);
       return () => {};
   }
 
-  const q = query(jobsCollection, where("userId", "==", userId));
-  const unsubscribe = onSnapshot(q, (querySnapshot) => {
-    const jobs = querySnapshot.docs.map(
-      (d) => ({ id: d.id, ...d.data() })
-    );
-    // Sort by newest first
-    jobs.sort((a: any, b: any) => b.createdAt - a.createdAt);
-    callback(jobs);
-  }, (error) => {
-      console.error("[DB] Job sync error:", error);
-      callback([]);
-  });
-  return unsubscribe;
+  try {
+    const jobsCollection = getJobsCollection();
+    const q = query(jobsCollection, where("userId", "==", userId));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const jobs = querySnapshot.docs.map(
+        (d) => ({ id: d.id, ...d.data() })
+      );
+      // Sort by newest first
+      jobs.sort((a: any, b: any) => b.createdAt - a.createdAt);
+      callback(jobs);
+    }, (error) => {
+        console.error("[DB] Job sync error:", error);
+        callback([]);
+    });
+    return unsubscribe;
+  } catch (err) {
+    console.error("[DB] Failed to sync jobs:", err);
+    callback([]);
+    return () => {};
+  }
 }

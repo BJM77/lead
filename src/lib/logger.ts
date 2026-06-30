@@ -1,6 +1,5 @@
 // src/lib/logger.ts
 import {
-  getFirestore,
   collection,
   addDoc,
   query,
@@ -10,7 +9,7 @@ import {
   deleteDoc,
   getDocs,
 } from 'firebase/firestore';
-import { app } from './firebase';
+import { db } from './firebase';
 
 export type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 
@@ -21,8 +20,6 @@ export type LogEntry = {
   message: string;
 };
 
-const db = getFirestore(app);
-const logsCollection = collection(db, 'logs');
 const MAX_LOGS = 200;
 
 // In-memory store for server-side logs
@@ -34,6 +31,13 @@ export function getServerLogs(): LogEntry[] {
 
 export function clearServerLogs(): void {
   serverLogs.length = 0;
+}
+
+function getLogsCollection() {
+  if (!db) {
+    throw new Error("Firestore database is not initialized. Verify your Firebase configuration.");
+  }
+  return collection(db, 'logs');
 }
 
 class Logger {
@@ -56,6 +60,7 @@ class Logger {
     }
     
     try {
+      const logsCollection = getLogsCollection();
       await addDoc(logsCollection, {
         timestamp: Date.now(),
         level,
@@ -84,43 +89,64 @@ class Logger {
   }
 
   listenToLogs(callback: (logs: LogEntry[]) => void): () => void {
-    const q = query(
-      logsCollection,
-      orderBy('timestamp', 'desc'),
-      limit(MAX_LOGS)
-    );
+    if (!db) {
+      callback([]);
+      return () => {};
+    }
+    
+    try {
+      const logsCollection = getLogsCollection();
+      const q = query(
+        logsCollection,
+        orderBy('timestamp', 'desc'),
+        limit(MAX_LOGS)
+      );
 
-    const unsubscribe = onSnapshot(
-      q,
-      (querySnapshot) => {
-        const logs = querySnapshot.docs.map(
-          (doc) => ({ id: doc.id, ...doc.data() } as LogEntry)
-        );
-        callback(logs);
-      },
-      (error) => {
-        console.error('Error listening to logs:', error);
-        callback([]); // Send empty array on error
-      }
-    );
+      const unsubscribe = onSnapshot(
+        q,
+        (querySnapshot) => {
+          const logs = querySnapshot.docs.map(
+            (doc) => ({ id: doc.id, ...doc.data() } as LogEntry)
+          );
+          callback(logs);
+        },
+        (error) => {
+          console.error('Error listening to logs:', error);
+          callback([]); // Send empty array on error
+        }
+      );
 
-    return unsubscribe;
+      return unsubscribe;
+    } catch (err) {
+      console.error('Failed to listen to logs:', err);
+      callback([]);
+      return () => {};
+    }
   }
 
   async getLogs(): Promise<LogEntry[]> {
-    const q = query(
-      logsCollection,
-      orderBy('timestamp', 'desc'),
-      limit(MAX_LOGS)
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(
-      (doc) => ({ id: doc.id, ...doc.data() } as LogEntry)
-    );
+    if (!db) return [];
+    try {
+      const logsCollection = getLogsCollection();
+      const q = query(
+        logsCollection,
+        orderBy('timestamp', 'desc'),
+        limit(MAX_LOGS)
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as LogEntry)
+      );
+    } catch (err) {
+      console.error('Failed to get logs:', err);
+      return [];
+    }
   }
 
   async clearLogs(): Promise<void> {
+    if (!db) return;
     try {
+      const logsCollection = getLogsCollection();
       const snapshot = await getDocs(logsCollection);
       const deletePromises = snapshot.docs.map((document) =>
         deleteDoc(document.ref)
