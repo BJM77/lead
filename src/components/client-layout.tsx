@@ -14,11 +14,17 @@ import { Loader2 } from 'lucide-react';
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [isPopup, setIsPopup] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
     console.log('[Orchestrator] Initializing session listener...');
+
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      setIsPopup(params.get('popup') === 'true');
+    }
     
     // Primary Firebase Observer
     if (!auth) {
@@ -75,6 +81,13 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
   // Render the secure Shell if authenticated
   if (user && !isAuthPage) {
+    if (isPopup) {
+      return (
+        <div className="min-h-screen w-full bg-white text-black p-6 overflow-y-auto">
+          {children}
+        </div>
+      );
+    }
     return <AppLayout>{children}</AppLayout>;
   }
 

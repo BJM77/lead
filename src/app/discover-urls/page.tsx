@@ -83,102 +83,16 @@ export default function DiscoverUrlsPage() {
   const [inTitleInput, setInTitleInput] = useState('shipping information, delivery information');
   const [siteInput, setSiteInput] = useState('');
   const [generalKeywords, setGeneralKeywords] = useState('');
-  // Popup Capture States
-  const [activeCaptureUrl, setActiveCaptureUrl] = useState<string | null>(null);
-  const [isPopupOpen, setIsPopupOpen] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisProgress, setAnalysisProgress] = useState<string | null>(null);
-  const [extractedLead, setExtractedLead] = useState<ExtractedLeadData | null>(null);
-  const [analysisReport, setAnalysisReport] = useState<string | null>(null);
-  const [isSavingLead, setIsSavingLead] = useState(false);
-
-  const startAnalysis = async (url: string) => {
-    setActiveCaptureUrl(url);
-    setIsPopupOpen(true);
-    setIsAnalyzing(true);
-    setExtractedLead(null);
-    setAnalysisReport(null);
-    setAnalysisProgress('Initializing analysis...');
-
-    let intervalId: any = null;
-    try {
-      const jobId = await createJobAction();
-      if (jobId && typeof jobId === 'object' && 'error' in jobId) {
-        throw new Error((jobId as any).error);
-      }
-
-      intervalId = setInterval(async () => {
-        try {
-          const progress = await getJobProgressAction(jobId);
-          if (progress && 'message' in progress) {
-            setAnalysisProgress(progress.message);
-          }
-        } catch (e) {}
-      }, 1500);
-
-      const result = await extractLeadFromUrlAction({ url, jobId });
-      if (result && 'error' in result) {
-        toast({ title: 'Analysis Failed', description: result.error, variant: 'destructive' });
-        setIsAnalyzing(false);
-        return;
-      }
-
-      setAnalysisReport(result.message);
-      if (result.extractedData) {
-        setExtractedLead(result.extractedData);
-        toast({ title: 'Analysis Successful', description: 'Intelligent extraction completed.' });
-      } else {
-        toast({ title: 'Analysis Failed', description: result.message, variant: 'destructive' });
-      }
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    } finally {
-      if (intervalId) clearInterval(intervalId);
-      setIsAnalyzing(false);
-      setAnalysisProgress(null);
-    }
-  };
-
-  const handleSaveLeadInPopup = async (formData: Omit<NewLead, 'userId' | 'createdAt'>) => {
-    setIsSavingLead(true);
-    const userId = (await import('@/lib/firebase')).auth?.currentUser?.uid;
-    if (!userId) {
-      toast({ title: 'Authentication Error', description: 'You must be logged in to save leads.', variant: 'destructive' });
-      setIsSavingLead(false);
-      return;
-    }
-
-    try {
-      const finalFormData = {
-        ...formData,
-        details: `${formData.details || ''}\n\nSource URL: ${activeCaptureUrl}`,
-        source: "Web Page Capture" as const,
-        sourceUrl: activeCaptureUrl || undefined,
-      };
-      
-      const result = await createLeadFromFormAction(finalFormData);
-      if (result && 'error' in result) {
-        toast({ title: 'Failed to Save Lead', description: result.error, variant: 'destructive' });
-        setIsSavingLead(false);
-        return;
-      }
-      await (await import('@/lib/db')).createLead(result.enrichedLead, userId);
-      toast({ title: 'Lead Saved!', description: result.message });
-      
-      if (activeCaptureUrl) {
-        setExistingLeadUrls(prev => {
-          const next = new Set(prev);
-          next.add(normalizeUrl(activeCaptureUrl));
-          return next;
-        });
-      }
-      
-      setIsPopupOpen(false);
-    } catch (error: any) {
-      toast({ title: 'Failed to Save Lead', description: error.message, variant: 'destructive' });
-    } finally {
-      setIsSavingLead(false);
-    }
+  const handleCapture = (url: string) => {
+    const width = 1200;
+    const height = 900;
+    const left = (window.screen.width - width) / 2;
+    const top = (window.screen.height - height) / 2;
+    window.open(
+      `/capture?url=${encodeURIComponent(url)}&popup=true`,
+      '_blank',
+      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`
+    );
   };
   const { toast } = useToast();
   const router = useRouter();
@@ -281,9 +195,7 @@ export default function DiscoverUrlsPage() {
     }
   };
 
-  const handleCapture = (url: string) => {
-    router.push(`/capture?url=${encodeURIComponent(url)}`);
-  };
+
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
@@ -461,7 +373,7 @@ export default function DiscoverUrlsPage() {
                         <div className="space-y-1 flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <button 
-                              onClick={() => startAnalysis(item.url)}
+                              onClick={() => handleCapture(item.url)}
                               className="font-bold text-sm hover:underline hover:text-primary text-left"
                             >
                               {item.title}
@@ -486,7 +398,7 @@ export default function DiscoverUrlsPage() {
                             size="sm" 
                             variant="default"
                             className="w-full text-[11px] h-8" 
-                            onClick={() => startAnalysis(item.url)}
+                            onClick={() => handleCapture(item.url)}
                           >
                             <ScanSearch className="mr-1 h-3 w-3" /> Analyze & Capture
                           </Button>
@@ -500,49 +412,6 @@ export default function DiscoverUrlsPage() {
           )}
         </div>
       </div>
-
-      <Dialog open={isPopupOpen} onOpenChange={(open) => {
-        setIsPopupOpen(open);
-        if (!open) {
-          setExtractedLead(null);
-          setAnalysisReport(null);
-        }
-      }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Analyze & Capture Lead</DialogTitle>
-            <DialogDescription className="font-mono text-xs text-primary truncate">
-              Target: {activeCaptureUrl}
-            </DialogDescription>
-          </DialogHeader>
-
-          {isAnalyzing && (
-            <div className="flex flex-col items-center justify-center p-12 space-y-4">
-              <Loader2 className="h-10 w-10 animate-spin text-primary" />
-              <div className="text-center">
-                <p className="font-semibold text-sm">Analyzing page content...</p>
-                {analysisProgress && (
-                  <p className="text-xs text-muted-foreground mt-1 animate-pulse">{analysisProgress}</p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {!isAnalyzing && extractedLead && (
-            <div className="mt-4">
-              <LeadVerificationForm
-                initialData={extractedLead}
-                onSubmit={handleSaveLeadInPopup}
-                isSaving={isSavingLead}
-                analysisMessage={analysisReport}
-                isDisabled={false}
-                sourceType="Web Page Capture"
-                autoSubmitAfterSeconds={10}
-              />
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

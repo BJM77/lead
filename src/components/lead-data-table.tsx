@@ -23,8 +23,10 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Download } from 'lucide-react';
+import { Download, Trash2, Loader2 } from 'lucide-react';
 import type { Lead } from '@/types';
+import { deleteLead } from '@/lib/db';
+import { useToast } from '@/hooks/use-toast';
 
 interface LeadDataTableProps<TData extends Lead, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -42,6 +44,92 @@ export function LeadDataTable<TData extends Lead, TValue>({
     []
   );
   const [rowSelection, setRowSelection] = React.useState({});
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const { toast } = useToast();
+
+  const handleDeleteSelected = async () => {
+    const selectedRows = table.getFilteredSelectedRowModel().rows;
+    if (selectedRows.length === 0) return;
+
+    const confirmMessage = selectedRows.length === 1 
+      ? "Are you sure you want to delete this lead?" 
+      : `Are you sure you want to delete the ${selectedRows.length} selected leads?`;
+
+    if (!window.confirm(confirmMessage)) return;
+
+    setIsDeleting(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const row of selectedRows) {
+      try {
+        const lead = row.original as Lead;
+        if (lead.id) {
+          await deleteLead(lead.id);
+          successCount++;
+        }
+      } catch (err: any) {
+        console.error("Failed to delete lead:", err);
+        failCount++;
+      }
+    }
+
+    setIsDeleting(false);
+    setRowSelection({});
+
+    if (failCount > 0) {
+      toast({
+        title: "Deletion Partially Completed",
+        description: `Successfully deleted ${successCount} leads. Failed to delete ${failCount} leads (ownership check).`,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Leads Deleted",
+        description: `Successfully deleted ${successCount} leads.`,
+      });
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (data.length === 0) return;
+
+    if (!window.confirm("CRITICAL WARNING: Are you sure you want to delete ALL leads in your database? This action is permanent and cannot be undone.")) {
+      return;
+    }
+
+    setIsDeleting(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const item of data) {
+      try {
+        if (item.id) {
+          await deleteLead(item.id);
+          successCount++;
+        }
+      } catch (err: any) {
+        console.error("Failed to delete lead:", err);
+        failCount++;
+      }
+    }
+
+    setIsDeleting(false);
+    setRowSelection({});
+
+    if (failCount > 0) {
+      toast({
+        title: "Bulk Deletion Partially Completed",
+        description: `Deleted ${successCount} leads. Failed to delete ${failCount} leads (ownership check).`,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "All Leads Deleted",
+        description: `Successfully wiped all ${successCount} leads.`,
+      });
+    }
+  };
 
   const table = useReactTable({
     data,
@@ -138,14 +226,47 @@ export function LeadDataTable<TData extends Lead, TValue>({
           }
           className="max-w-sm"
         />
-        <Button
-          variant="outline"
-          onClick={handleExport}
-          disabled={table.getFilteredRowModel().rows.length === 0}
-        >
-          <Download className="mr-2 h-4 w-4" />
-          Export to CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          {table.getFilteredSelectedRowModel().rows.length > 0 && (
+            <Button
+              variant="destructive"
+              onClick={handleDeleteSelected}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Delete Selected ({table.getFilteredSelectedRowModel().rows.length})
+            </Button>
+          )}
+
+          {data.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleDeleteAll}
+              disabled={isDeleting}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+            >
+              {isDeleting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Delete All
+            </Button>
+          )}
+
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            disabled={table.getFilteredRowModel().rows.length === 0}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export to CSV
+          </Button>
+        </div>
       </div>
       <div className="rounded-md border bg-card">
         <Table>
