@@ -29,14 +29,14 @@ const StatusIndicator = ({ status }: { status: Status }) => {
 };
 
 const StatusItem = ({ name, icon: Icon, status, message }: { name: string; icon: React.ElementType, status: Status, message: string }) => (
-    <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-        <div className="flex items-center gap-3">
-            <Icon className="h-5 w-5 text-muted-foreground" />
-            <span className="font-medium">{name}</span>
-        </div>
-        <div className="flex items-center gap-3">
-            <p className="text-sm text-muted-foreground truncate max-w-xs" title={message}>{message}</p>
+    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 w-full">
+        <div className="flex items-center justify-center w-5 h-5 shrink-0">
             <StatusIndicator status={status} />
+        </div>
+        <Icon className="h-5 w-5 text-muted-foreground shrink-0" />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 flex-1 min-w-0">
+            <span className="font-medium shrink-0">{name}</span>
+            <p className="text-sm text-muted-foreground truncate" title={message}>{message}</p>
         </div>
     </div>
 );
