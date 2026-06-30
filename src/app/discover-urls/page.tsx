@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -19,14 +19,6 @@ import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
 import { getLeads } from '@/lib/db';
 import { Label } from '@/components/ui/label';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
-import { LeadVerificationForm } from '@/components/lead-verification-form';
 
 const PRESETS = [
   {
@@ -71,7 +63,27 @@ const PRESETS = [
   }
 ];
 
+const OPERATORS = [
+  { code: '""', label: 'Exact Match', desc: 'Search for an entire phrase. Ex: "bissell crosswave 1785"', placeholder: '""' },
+  { code: 'AND', label: 'AND Operator', desc: 'Results related to everything listed. Ex: seo AND content', placeholder: 'AND' },
+  { code: 'OR', label: 'OR Operator', desc: 'Results related to any term listed. Ex: yoga OR pilates', placeholder: 'OR' },
+  { code: '-', label: 'Exclude Word', desc: 'Exclude a specific word or phrase. Ex: -Los -Angeles', placeholder: '-' },
+  { code: '*', label: 'Wildcard', desc: 'Fill-in-the-blank placeholder. Ex: Mackenzie Scott * Donation', placeholder: '*' },
+  { code: 'site:', label: 'Site Limit', desc: 'Find pages from a specific website. Ex: site:thepointsguy.com', placeholder: 'site:' },
+  { code: 'intext:', label: 'In Text', desc: 'Word must appear in page body text. Ex: intext:airpods', placeholder: 'intext:' },
+  { code: 'allintext:', label: 'All In Text', desc: 'All words must be in page body text. Ex: allintext:airpods pro', placeholder: 'allintext:' },
+  { code: 'intitle:', label: 'In Title', desc: 'Word must be in meta title tag. Ex: intitle:samsung', placeholder: 'intitle:' },
+  { code: 'allintitle:', label: 'All In Title', desc: 'All words must be in meta title tag. Ex: allintitle:tahoe rentals', placeholder: 'allintitle:' },
+  { code: 'inurl:', label: 'In URL', desc: 'Word must be in the page URL. Ex: inurl:airpods', placeholder: 'inurl:' },
+  { code: 'allinurl:', label: 'All In URL', desc: 'All words must be in the page URL. Ex: allinurl:jomalone fragrance', placeholder: 'allinurl:' },
+  { code: 'filetype:', label: 'File Type', desc: 'Restrict results to a file extension. Ex: seo filetype:pdf', placeholder: 'filetype:' },
+  { code: 'related:', label: 'Related Sites', desc: 'Find sites similar to the target domain. Ex: related:vrbo.com', placeholder: 'related:' },
+  { code: 'AROUND()', label: 'Proximity Search', desc: 'Find terms within a distance. Ex: t-rex AROUND(4) snarl', placeholder: 'AROUND(4)' },
+];
+
 export default function DiscoverUrlsPage() {
+  const [searchMode, setSearchMode] = useState<'standard' | 'custom'>('standard');
+  const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('(inurl:shipping OR inurl:"shipping-policy" OR intitle:"shipping information" OR intitle:"delivery information")');
   const [limit, setLimit] = useState(30);
   const [isLoading, setIsLoading] = useState(false);
@@ -195,6 +207,30 @@ export default function DiscoverUrlsPage() {
     }
   };
 
+  const insertOperator = (operator: string) => {
+    const input = inputRef.current;
+    if (!input) {
+      setQuery(prev => prev + (prev.endsWith(' ') || prev === '' ? '' : ' ') + operator);
+      return;
+    }
+    const start = input.selectionStart ?? 0;
+    const end = input.selectionEnd ?? 0;
+    const text = input.value;
+    const before = text.substring(0, start);
+    const after = text.substring(end);
+    const needsSpaceBefore = before !== '' && !before.endsWith(' ');
+    const needsSpaceAfter = after !== '' && !after.startsWith(' ');
+    const insertedText = (needsSpaceBefore ? ' ' : '') + operator + (needsSpaceAfter ? ' ' : '');
+    const newValue = before + insertedText + after;
+    setQuery(newValue);
+    
+    setTimeout(() => {
+      input.focus();
+      const newPos = start + insertedText.length;
+      input.setSelectionRange(newPos, newPos);
+    }, 0);
+  };
+
 
 
   return (
@@ -224,81 +260,130 @@ export default function DiscoverUrlsPage() {
             </CardHeader>
             <CardContent className="space-y-5 pt-5">
               
-              {/* Presets */}
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Presets & Templates</Label>
-                <div className="flex flex-wrap gap-2">
-                  {PRESETS.map((p, idx) => (
-                    <Button 
-                      key={idx} 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => loadPreset(p)}
-                      className="text-xs hover:border-primary/50 transition-all"
-                    >
-                      {p.name}
-                    </Button>
-                  ))}
-                </div>
+              {/* Tab Selector */}
+              <div className="grid grid-cols-2 gap-1 p-1 bg-muted rounded-md mb-2">
+                <Button 
+                  type="button"
+                  variant={searchMode === 'standard' ? 'secondary' : 'ghost'} 
+                  onClick={() => setSearchMode('standard')} 
+                  className="text-xs h-7 shadow-none"
+                >
+                  Standard Builder
+                </Button>
+                <Button 
+                  type="button"
+                  variant={searchMode === 'custom' ? 'secondary' : 'ghost'} 
+                  onClick={() => setSearchMode('custom')} 
+                  className="text-xs h-7 shadow-none"
+                >
+                  Custom Search Helper
+                </Button>
               </div>
 
-              <hr className="border-dashed" />
+              {searchMode === 'standard' ? (
+                <>
+                  {/* Presets */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Presets & Templates</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {PRESETS.map((p, idx) => (
+                        <Button 
+                          key={idx} 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => loadPreset(p)}
+                          className="text-xs hover:border-primary/50 transition-all"
+                        >
+                          {p.name}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
 
-              {/* Operator Builder */}
-              <div className="space-y-4">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                  Query Operator Builder
-                  <HelpCircle className="h-3 w-3 text-muted-foreground/60" />
-                </Label>
+                  <hr className="border-dashed" />
 
-                <div className="space-y-2">
-                  <Label htmlFor="inurl-builder" className="text-xs font-medium">In URL Keywords</Label>
-                  <Input
-                    id="inurl-builder"
-                    placeholder="Comma separated: e.g. shipping, delivery"
-                    value={inUrlInput}
-                    onChange={(e) => setInUrlInput(e.target.value)}
-                    className="text-xs"
-                  />
-                  <p className="text-[10px] text-muted-foreground">Checks if these terms appear in the page URL.</p>
+                  {/* Operator Builder */}
+                  <div className="space-y-4">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                      Query Operator Builder
+                      <HelpCircle className="h-3 w-3 text-muted-foreground/60" />
+                    </Label>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="inurl-builder" className="text-xs font-medium">In URL Keywords</Label>
+                      <Input
+                        id="inurl-builder"
+                        placeholder="Comma separated: e.g. shipping, delivery"
+                        value={inUrlInput}
+                        onChange={(e) => setInUrlInput(e.target.value)}
+                        className="text-xs"
+                      />
+                      <p className="text-[10px] text-muted-foreground">Checks if these terms appear in the page URL.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="intitle-builder" className="text-xs font-medium">In Title Keywords</Label>
+                      <Input
+                        id="intitle-builder"
+                        placeholder="Comma separated: e.g. shipping policy, deliver info"
+                        value={inTitleInput}
+                        onChange={(e) => setInTitleInput(e.target.value)}
+                        className="text-xs"
+                      />
+                      <p className="text-[10px] text-muted-foreground">Checks if these terms appear in the webpage header title.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="site-builder" className="text-xs font-medium">Domain / Site Match</Label>
+                      <Input
+                        id="site-builder"
+                        placeholder="e.g. .com.au, gov.au, myshopify.com"
+                        value={siteInput}
+                        onChange={(e) => setSiteInput(e.target.value)}
+                        className="text-xs"
+                      />
+                      <p className="text-[10px] text-muted-foreground">Optionally restrict results to a specific domain extension or service.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="general-keywords" className="text-xs font-medium">General Keywords</Label>
+                      <Input
+                        id="general-keywords"
+                        placeholder="e.g. e-commerce apparel"
+                        value={generalKeywords}
+                        onChange={(e) => setGeneralKeywords(e.target.value)}
+                        className="text-xs"
+                      />
+                      <p className="text-[10px] text-muted-foreground">Additional search terms to narrow down relevance.</p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Advanced Search Operators</Label>
+                    <p className="text-[11px] text-muted-foreground">Click any operator below to insert it at your cursor position in the Active Search Pattern field.</p>
+                  </div>
+                  
+                  <ScrollArea className="h-[45vh] pr-2 border rounded-md p-2 bg-muted/10">
+                    <div className="space-y-2">
+                      {OPERATORS.map((op, idx) => (
+                        <div 
+                          key={idx} 
+                          onClick={() => insertOperator(op.placeholder || op.code)}
+                          className="p-2 border rounded bg-card hover:bg-muted/30 cursor-pointer transition-colors space-y-1 text-left"
+                        >
+                          <div className="flex items-center justify-between">
+                            <code className="px-1 py-0.5 rounded bg-muted font-mono text-[10px] text-primary font-bold">{op.code}</code>
+                            <span className="text-[10px] font-semibold text-muted-foreground">{op.label}</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground leading-normal">{op.desc}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="intitle-builder" className="text-xs font-medium">In Title Keywords</Label>
-                  <Input
-                    id="intitle-builder"
-                    placeholder="Comma separated: e.g. shipping policy, deliver info"
-                    value={inTitleInput}
-                    onChange={(e) => setInTitleInput(e.target.value)}
-                    className="text-xs"
-                  />
-                  <p className="text-[10px] text-muted-foreground">Checks if these terms appear in the webpage header title.</p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="site-builder" className="text-xs font-medium">Domain / Site Match</Label>
-                  <Input
-                    id="site-builder"
-                    placeholder="e.g. .com.au, gov.au, myshopify.com"
-                    value={siteInput}
-                    onChange={(e) => setSiteInput(e.target.value)}
-                    className="text-xs"
-                  />
-                  <p className="text-[10px] text-muted-foreground">Optionally restrict results to a specific domain extension or service.</p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="general-keywords" className="text-xs font-medium">General Keywords</Label>
-                  <Input
-                    id="general-keywords"
-                    placeholder="e.g. e-commerce apparel"
-                    value={generalKeywords}
-                    onChange={(e) => setGeneralKeywords(e.target.value)}
-                    className="text-xs"
-                  />
-                  <p className="text-[10px] text-muted-foreground">Additional search terms to narrow down relevance.</p>
-                </div>
-              </div>
+              )}
 
               <hr className="border-dashed" />
 
@@ -336,6 +421,7 @@ export default function DiscoverUrlsPage() {
             <CardContent className="space-y-4">
               <div className="flex gap-2">
                 <Input
+                  ref={inputRef}
                   placeholder="Query pattern compiles here..."
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
