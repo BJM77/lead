@@ -69,7 +69,8 @@ function getRequestHeaders(referer?: string): Record<string, string> {
  * Perform a web search using Serper API (if key exists) or fallback to DuckDuckGo.
  */
 export async function performWebSearch(query: string, maxResults: number): Promise<{ url: string; title: string; snippet: string }[]> {
-  const serperApiKey = process.env.SERPER_API_KEY;
+  // Use bracket notation to prevent Next.js from statically replacing this at build time with undefined
+  const serperApiKey = process.env['SERPER_API_KEY'];
   
   return requestQueue.add(async () => {
     return RetryStrategy.withExponentialBackoff(async () => {

@@ -1,0 +1,1526 @@
+=== URL Discovery, Bulk Capture, Social Capture, Web Page Capture Code ===
+
+
+
+// ==========================================
+// FILE: src/app/discover-urls/page.tsx
+// ==========================================
+
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2, Search, ExternalLink, ScanSearch, Info, AlertTriangle, CheckCircle, SlidersHorizontal, Sparkles, HelpCircle } from 'lucide-react';
+import { 
+  discoverUrlsAction, 
+  createJobAction, 
+  getJobProgressAction, 
+  extractLeadFromUrlAction,
+  createLeadFromFormAction
+} from '@/app/actions';
+import { type DiscoveredUrl, type NewLead, type ExtractedLeadData } from '@/types';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import { useRouter } from 'next/navigation';
+import { getLeads } from '@/lib/db';
+import { Label } from '@/components/ui/label';
+
+const PRESETS = [
+  {
+    name: 'Shipping & Delivery',
+    description: 'Find shipping/delivery policies',
+    query: '(inurl:shipping OR inurl:"shipping-policy" OR intitle:"shipping information" OR intitle:"delivery information")',
+    inUrl: 'shipping, shipping-policy',
+    inTitle: 'shipping information, delivery information',
+    site: ''
+  },
+  {
+    name: 'Contact & Support',
+    description: 'Find contact-us or support links',
+    query: '(inurl:contact OR inurl:"contact-us" OR intitle:"contact us" OR intitle:"get in touch")',
+    inUrl: 'contact, contact-us',
+    inTitle: 'contact us, get in touch',
+    site: ''
+  },
+  {
+    name: 'About Company',
+    description: 'Find about-us or team pages',
+    query: '(inurl:about OR inurl:"about-us" OR intitle:"about us" OR intitle:"our story")',
+    inUrl: 'about, about-us',
+    inTitle: 'about us, our story',
+    site: ''
+  },
+  {
+    name: 'Returns & Refunds',
+    description: 'Find refund or return policy pages',
+    query: '(inurl:refund OR inurl:returns OR intitle:"refund policy" OR intitle:"returns policy")',
+    inUrl: 'refund, returns',
+    inTitle: 'refund policy, returns policy',
+    site: ''
+  },
+  {
+    name: 'FAQ & Help Center',
+    description: 'Find FAQ or support documents',
+    query: '(inurl:faq OR inurl:faqs OR intitle:faq OR intitle:faqs OR intitle:"frequently asked questions")',
+    inUrl: 'faq, faqs',
+    inTitle: 'faq, faqs, frequently asked questions',
+    site: ''
+  }
+];
+
+const OPERATORS = [
+  { code: '""', label: 'Exact Match', desc: 'Search for an entire phrase. Ex: "bissell crosswave 1785"', placeholder: '""' },
+  { code: 'AND', label: 'AND Operator', desc: 'Results related to everything listed. Ex: seo AND content', placeholder: 'AND' },
+  { code: 'OR', label: 'OR Operator', desc: 'Results related to any term listed. Ex: yoga OR pilates', placeholder: 'OR' },
+  { code: '-', label: 'Exclude Word', desc: 'Exclude a specific word or phrase. Ex: -Los -Angeles', placeholder: '-' },
+  { code: '*', label: 'Wildcard', desc: 'Fill-in-the-blank placeholder. Ex: Mackenzie Scott * Donation', placeholder: '*' },
+  { code: 'site:', label: 'Site Limit', desc: 'Find pages from a specific website. Ex: site:thepointsguy.com', placeholder: 'site:' },
+  { code: 'intext:', label: 'In Text', desc: 'Word must appear in page body text. Ex: intext:airpods', placeholder: 'intext:' },
+  { code: 'allintext:', label: 'All In Text', desc: 'All words must be in page body text. Ex: allintext:airpods pro', placeholder: 'allintext:' },
+  { code: 'intitle:', label: 'In Title', desc: 'Word must be in meta title tag. Ex: intitle:samsung', placeholder: 'intitle:' },
+  { code: 'allintitle:', label: 'All In Title', desc: 'All words must be in meta title tag. Ex: allintitle:tahoe rentals', placeholder: 'allintitle:' },
+  { code: 'inurl:', label: 'In URL', desc: 'Word must be in the page URL. Ex: inurl:airpods', placeholder: 'inurl:' },
+  { code: 'allinurl:', label: 'All In URL', desc: 'All words must be in the page URL. Ex: allinurl:jomalone fragrance', placeholder: 'allinurl:' },
+  { code: 'filetype:', label: 'File Type', desc: 'Restrict results to a file extension. Ex: seo filetype:pdf', placeholder: 'filetype:' },
+  { code: 'related:', label: 'Related Sites', desc: 'Find sites similar to the target domain. Ex: related:vrbo.com', placeholder: 'related:' },
+  { code: 'AROUND()', label: 'Proximity Search', desc: 'Find terms within a distance. Ex: t-rex AROUND(4) snarl', placeholder: 'AROUND(4)' },
+];
+
+export default function DiscoverUrlsPage() {
+  const [searchMode, setSearchMode] = useState<'standard' | 'custom'>('standard');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState('(inurl:shipping OR inurl:"shipping-policy" OR intitle:"shipping information" OR intitle:"delivery information")');
+  const [limit, setLimit] = useState(30);
+  const [isLoading, setIsLoading] = useState(false);
+  const [urls, setUrls] = useState<DiscoveredUrl[]>([]);
+  const [existingLeadUrls, setExistingLeadUrls] = useState<Set<string>>(new Set());
+  
+  // Custom query builder fields
+  const [inUrlInput, setInUrlInput] = useState('shipping, shipping-policy');
+  const [inTitleInput, setInTitleInput] = useState('shipping information, delivery information');
+  const [siteInput, setSiteInput] = useState('');
+  const [generalKeywords, setGeneralKeywords] = useState('');
+  const handleCapture = (url: string) => {
+    const width = 1200;
+    const height = 900;
+    const left = (window.screen.width - width) / 2;
+    const top = (window.screen.height - height) / 2;
+    window.open(
+      `/capture?url=${encodeURIComponent(url)}&popup=true`,
+      '_blank',
+      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`
+    );
+  };
+  const { toast } = useToast();
+  const router = useRouter();
+
+  // Normalize URL for reliable duplicate checking
+  const normalizeUrl = (url: string): string => {
+    try {
+      const u = new URL(url);
+      return (u.origin + u.pathname).replace(/\/$/, '').toLowerCase();
+    } catch {
+      return url.toLowerCase();
+    }
+  };
+
+  // Fetch existing leads on mount to identify duplicates
+  useEffect(() => {
+    const fetchExisting = async () => {
+      try {
+        const leads = await getLeads();
+        const urlSet = new Set(leads.map(l => normalizeUrl(l.sourceUrl || l.company.website || '')));
+        setExistingLeadUrls(urlSet);
+      } catch (e) {
+        console.error("Failed to fetch existing leads for deduplication", e);
+      }
+    };
+    fetchExisting();
+  }, []);
+
+  // Update query automatically when builder fields change
+  useEffect(() => {
+    const parts: string[] = [];
+
+    // Parse inurl parts
+    if (inUrlInput.trim()) {
+      const uParts = inUrlInput.split(',').map(s => s.trim()).filter(Boolean);
+      if (uParts.length > 0) {
+        const inner = uParts.map(p => `inurl:${p.includes(' ') ? `"${p}"` : p}`).join(' OR ');
+        parts.push(uParts.length > 1 ? `(${inner})` : inner);
+      }
+    }
+
+    // Parse intitle parts
+    if (inTitleInput.trim()) {
+      const tParts = inTitleInput.split(',').map(s => s.trim()).filter(Boolean);
+      if (tParts.length > 0) {
+        const inner = tParts.map(p => `intitle:${p.includes(' ') ? `"${p}"` : p}`).join(' OR ');
+        parts.push(tParts.length > 1 ? `(${inner})` : inner);
+      }
+    }
+
+    // Parse site constraint
+    if (siteInput.trim()) {
+      parts.push(`site:${siteInput.trim()}`);
+    }
+
+    // Parse general keywords
+    if (generalKeywords.trim()) {
+      parts.push(generalKeywords.trim());
+    }
+
+    if (parts.length > 0) {
+      setQuery(parts.join(' OR '));
+    }
+  }, [inUrlInput, inTitleInput, siteInput, generalKeywords]);
+
+  const loadPreset = (preset: typeof PRESETS[0]) => {
+    setInUrlInput(preset.inUrl);
+    setInTitleInput(preset.inTitle);
+    setSiteInput(preset.site);
+    setGeneralKeywords('');
+    setQuery(preset.query);
+    toast({
+      title: 'Preset Loaded',
+      description: `Loaded templates for ${preset.name}`
+    });
+  };
+
+  const handleSearch = async () => {
+    if (!query) {
+      toast({ title: 'No Query', description: 'Please enter a search query.', variant: 'destructive' });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const response = await discoverUrlsAction({ 
+        query, 
+        limit, 
+        excludeUrls: Array.from(existingLeadUrls) 
+      });
+      if (response && 'error' in response) {
+        toast({ title: 'Search Failed', description: response.error, variant: 'destructive' });
+        return;
+      }
+      setUrls(response.urls);
+      toast({ title: 'Discovery Complete', description: `Identified ${response.urls.length} target URLs.` });
+    } catch (error: any) {
+      toast({ title: 'Search Failed', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const insertOperator = (operator: string) => {
+    const input = inputRef.current;
+    if (!input) {
+      setQuery(prev => prev + (prev.endsWith(' ') || prev === '' ? '' : ' ') + operator);
+      return;
+    }
+    const start = input.selectionStart ?? 0;
+    const end = input.selectionEnd ?? 0;
+    const text = input.value;
+    const before = text.substring(0, start);
+    const after = text.substring(end);
+    const needsSpaceBefore = before !== '' && !before.endsWith(' ');
+    const needsSpaceAfter = after !== '' && !after.startsWith(' ');
+    const insertedText = (needsSpaceBefore ? ' ' : '') + operator + (needsSpaceAfter ? ' ' : '');
+    const newValue = before + insertedText + after;
+    setQuery(newValue);
+    
+    setTimeout(() => {
+      input.focus();
+      const newPos = start + insertedText.length;
+      input.setSelectionRange(newPos, newPos);
+    }, 0);
+  };
+
+
+
+  return (
+    <div className="flex flex-1 flex-col gap-6 p-6">
+      <div className="mx-auto grid w-full max-w-7xl gap-2">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-6 w-6 text-primary" />
+          <h1 className="text-3xl font-bold tracking-tight">URL Intelligence Discovery</h1>
+        </div>
+        <p className="text-muted-foreground">
+          Identify target pages using advanced query patterns. Duplicates from your current Lead pool are automatically excluded from the results.
+        </p>
+      </div>
+
+      <div className="mx-auto grid w-full max-w-7xl grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Column - Parameters Editor */}
+        <div className="lg:col-span-5 space-y-6">
+          <Card className="shadow-md">
+            <CardHeader className="pb-4 border-b">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="h-5 w-5 text-primary" />
+                <CardTitle>Discovery Parameters</CardTitle>
+              </div>
+              <CardDescription>
+                Configure the rules below to craft the target search.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5 pt-5">
+              
+              {/* Tab Selector */}
+              <div className="grid grid-cols-2 gap-1 p-1 bg-muted rounded-md mb-2">
+                <Button 
+                  type="button"
+                  variant={searchMode === 'standard' ? 'secondary' : 'ghost'} 
+                  onClick={() => setSearchMode('standard')} 
+                  className="text-xs h-7 shadow-none"
+                >
+                  Standard Builder
+                </Button>
+                <Button 
+                  type="button"
+                  variant={searchMode === 'custom' ? 'secondary' : 'ghost'} 
+                  onClick={() => setSearchMode('custom')} 
+                  className="text-xs h-7 shadow-none"
+                >
+                  Custom Search Helper
+                </Button>
+              </div>
+
+              {searchMode === 'standard' ? (
+                <>
+                  {/* Presets */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Presets & Templates</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {PRESETS.map((p, idx) => (
+                        <Button 
+                          key={idx} 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => loadPreset(p)}
+                          className="text-xs hover:border-primary/50 transition-all"
+                        >
+                          {p.name}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <hr className="border-dashed" />
+
+                  {/* Operator Builder */}
+                  <div className="space-y-4">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                      Query Operator Builder
+                      <HelpCircle className="h-3 w-3 text-muted-foreground/60" />
+                    </Label>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="inurl-builder" className="text-xs font-medium">In URL Keywords</Label>
+                      <Input
+                        id="inurl-builder"
+                        placeholder="Comma separated: e.g. shipping, delivery"
+                        value={inUrlInput}
+                        onChange={(e) => setInUrlInput(e.target.value)}
+                        className="text-xs"
+                      />
+                      <p className="text-[10px] text-muted-foreground">Checks if these terms appear in the page URL.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="intitle-builder" className="text-xs font-medium">In Title Keywords</Label>
+                      <Input
+                        id="intitle-builder"
+                        placeholder="Comma separated: e.g. shipping policy, deliver info"
+                        value={inTitleInput}
+                        onChange={(e) => setInTitleInput(e.target.value)}
+                        className="text-xs"
+                      />
+                      <p className="text-[10px] text-muted-foreground">Checks if these terms appear in the webpage header title.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="site-builder" className="text-xs font-medium">Domain / Site Match</Label>
+                      <Input
+                        id="site-builder"
+                        placeholder="e.g. .com.au, gov.au, myshopify.com"
+                        value={siteInput}
+                        onChange={(e) => setSiteInput(e.target.value)}
+                        className="text-xs"
+                      />
+                      <p className="text-[10px] text-muted-foreground">Optionally restrict results to a specific domain extension or service.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="general-keywords" className="text-xs font-medium">General Keywords</Label>
+                      <Input
+                        id="general-keywords"
+                        placeholder="e.g. e-commerce apparel"
+                        value={generalKeywords}
+                        onChange={(e) => setGeneralKeywords(e.target.value)}
+                        className="text-xs"
+                      />
+                      <p className="text-[10px] text-muted-foreground">Additional search terms to narrow down relevance.</p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Advanced Search Operators</Label>
+                    <p className="text-[11px] text-muted-foreground">Click any operator below to insert it at your cursor position in the Active Search Pattern field.</p>
+                  </div>
+                  
+                  <ScrollArea className="h-[45vh] pr-2 border rounded-md p-2 bg-muted/10">
+                    <div className="space-y-2">
+                      {OPERATORS.map((op, idx) => (
+                        <div 
+                          key={idx} 
+                          onClick={() => insertOperator(op.placeholder || op.code)}
+                          className="p-2 border rounded bg-card hover:bg-muted/30 cursor-pointer transition-colors space-y-1 text-left"
+                        >
+                          <div className="flex items-center justify-between">
+                            <code className="px-1 py-0.5 rounded bg-muted font-mono text-[10px] text-primary font-bold">{op.code}</code>
+                            <span className="text-[10px] font-semibold text-muted-foreground">{op.label}</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground leading-normal">{op.desc}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+
+              <hr className="border-dashed" />
+
+              {/* Limit Selector */}
+              <div className="space-y-2">
+                <Label htmlFor="limit-selector" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Number of Targets</Label>
+                <div className="flex items-center gap-4">
+                  <select
+                    id="limit-selector"
+                    value={limit}
+                    onChange={(e) => setLimit(Number(e.target.value))}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <option value={10}>10 Targets</option>
+                    <option value={20}>20 Targets</option>
+                    <option value={30}>30 Targets</option>
+                    <option value={50}>50 Targets</option>
+                  </select>
+                </div>
+              </div>
+
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column - Compiled Query & Results */}
+        <div className="lg:col-span-7 space-y-6">
+          <Card className="shadow-md">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base flex items-center justify-between">
+                <span>Active Search Pattern</span>
+                <Badge variant="outline" className="font-mono text-[10px] uppercase">Compiled</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Input
+                  ref={inputRef}
+                  placeholder="Query pattern compiles here..."
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="flex-1 font-mono text-xs"
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                />
+                <Button onClick={handleSearch} disabled={isLoading} className="px-5">
+                  {isLoading ? <Loader2 className="animate-spin mr-1 h-4 w-4" /> : <Search className="mr-1 h-4 w-4" />} Run Discovery
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-amber-500/10 border border-amber-500/25 p-3 rounded">
+                <Info className="h-4 w-4 text-amber-500 shrink-0" />
+                <p>
+                  Collision detection compares results against <strong>{existingLeadUrls.size}</strong> existing leads. Duplicate domains are ignored automatically.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Results list */}
+          {urls.length > 0 && (
+            <Card className="shadow-md overflow-hidden">
+              <CardHeader className="border-b bg-muted/20">
+                <CardTitle className="text-base flex items-center justify-between">
+                  <span>Identified Targets</span>
+                  <Badge>{urls.length} Found</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ScrollArea className="h-[60vh]">
+                  <div className="divide-y divide-border">
+                    {urls.map((item, index) => (
+                      <div key={index} className="p-4 hover:bg-muted/20 transition-colors flex items-start justify-between gap-4">
+                        <div className="space-y-1 flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <button 
+                              onClick={() => handleCapture(item.url)}
+                              className="font-bold text-sm hover:underline hover:text-primary text-left"
+                            >
+                              {item.title}
+                            </button>
+                            <Badge variant="secondary" className="text-[10px] h-4">
+                              Score: {item.relevanceScore}%
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-primary truncate max-w-md font-mono">{item.url}</p>
+                          <p className="text-xs text-muted-foreground leading-relaxed">{item.snippet}</p>
+                        </div>
+                        <div className="flex flex-col gap-2 shrink-0">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="w-full text-[11px] h-8"
+                            onClick={() => window.open(item.url, '_blank', 'width=1000,height=800,menubar=no,toolbar=no,location=yes,status=yes,scrollbars=yes')}
+                          >
+                            <ExternalLink className="mr-1 h-3 w-3" /> View Page
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="default"
+                            className="w-full text-[11px] h-8" 
+                            onClick={() => handleCapture(item.url)}
+                          >
+                            <ScanSearch className="mr-1 h-3 w-3" /> Analyze & Capture
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ==========================================
+// FILE: src/ai/flows/discover-urls.ts
+// ==========================================
+
+'use server';
+/**
+ * @fileOverview AI flow to discover specific URLs based on search queries with internal deduplication.
+ */
+
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { logger } from '@/lib/logger';
+import { DiscoveredUrlSchema, type DiscoveredUrl } from '@/types';
+
+import { performWebSearch } from '@/lib/scraper';
+
+const DiscoverUrlsInputSchema = z.object({
+  query: z.string().describe("The search query or keyword to find target URLs."),
+  limit: z.number().default(10),
+  excludeUrls: z.array(z.string()).optional().describe("List of URLs/domains to exclude to ensure uniqueness."),
+});
+
+const DiscoverUrlsOutputSchema = z.object({
+  urls: z.array(DiscoveredUrlSchema),
+  message: z.string(),
+});
+
+/**
+ * Normalizes a URL for comparison to help with deduplication.
+ */
+function normalizeUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    return (u.origin + u.pathname).replace(/\/$/, '').toLowerCase();
+  } catch {
+    return url.toLowerCase();
+  }
+}
+
+export async function discoverUrls(input: z.infer<typeof DiscoverUrlsInputSchema>) {
+  return discoverUrlsFlow(input);
+}
+
+const discoverUrlsFlow = ai.defineFlow(
+  {
+    name: 'discoverUrlsFlow',
+    inputSchema: DiscoverUrlsInputSchema,
+    outputSchema: DiscoverUrlsOutputSchema,
+  },
+  async (input) => {
+    logger.info(`[URL Discovery] Running discovery for query: ${input.query}`);
+
+    const requestLimit = Math.max(input.limit * 2, 60);
+    const hasDorking = /inurl:|intitle:|site:|filetype:/i.test(input.query);
+    let finalQuery = input.query;
+    
+    // If not a dorking query, we can try to be more specific to Australia 
+    // depending on the input, but we'll leave the query as is if it looks deliberate.
+    if (!hasDorking && !/australia|au/i.test(input.query)) {
+        finalQuery = `${input.query} Australia`;
+    }
+
+    let searchResults: { url: string; title: string; snippet: string }[] = [];
+    try {
+        searchResults = await performWebSearch(finalQuery, requestLimit);
+    } catch (e: any) {
+        logger.error(`[URL Discovery] Web search failed: ${e.message}`);
+    }
+
+    const excludeSet = new Set((input.excludeUrls || []).map(u => normalizeUrl(u)));
+    const seen = new Set<string>();
+    const uniqueUrls: DiscoveredUrl[] = [];
+
+    for (const item of searchResults) {
+      const normalized = normalizeUrl(item.url);
+      if (!seen.has(normalized) && !excludeSet.has(normalized)) {
+        seen.add(normalized);
+        uniqueUrls.push({
+          url: item.url,
+          title: item.title || 'Untitled Page',
+          snippet: item.snippet || 'No snippet available.',
+          relevanceScore: 90, // Baseline for a real search result
+        });
+      }
+    }
+
+    let finalUrls = uniqueUrls.slice(0, input.limit);
+
+    // Fallback to AI generation if DuckDuckGo returns nothing and it's not a dorking query
+    if (finalUrls.length === 0 && !hasDorking) {
+        logger.info(`[URL Discovery] Search engine returned no results. Falling back to AI knowledge.`);
+        let prompt = `You are a search intelligence bot. The user is looking for URLs that match a specific search pattern: "${input.query}".
+        
+        CRITICAL: Only return domains and businesses that are located in Australia. All candidate URLs must belong to Australian companies, organizations, or Australian branches.
+        
+        Based on your internal knowledge, provide a list of ${requestLimit} unique candidate URLs for real businesses in Australia that likely match this pattern.
+        Focus on well-known or verifiable corporate domains that would have such pages.`;
+
+        if (input.excludeUrls && input.excludeUrls.length > 0) {
+          prompt += `\n\nCRITICAL: DO NOT include any of the following URLs or domains in your output (exclude them completely):\n${input.excludeUrls.slice(0, 100).map(u => `- ${u}`).join('\n')}`;
+        }
+
+        prompt += `\n\nFor each URL, provide:
+        1. The URL of the specific page.
+        2. A descriptive title for the business/page.
+        3. A brief snippet of what a user would see on that page.
+        4. A relevance score from 0-100.`;
+
+        const { output } = await ai.generate({
+          prompt,
+          output: { schema: z.object({ urls: z.array(DiscoveredUrlSchema) }) }
+        });
+
+        const rawUrls = output?.urls || [];
+        for (const item of rawUrls) {
+          const normalized = normalizeUrl(item.url);
+          if (!seen.has(normalized) && !excludeSet.has(normalized)) {
+            seen.add(normalized);
+            uniqueUrls.push(item);
+          }
+        }
+        finalUrls = uniqueUrls.slice(0, input.limit);
+    }
+
+    return {
+      urls: finalUrls,
+      message: `Identified ${finalUrls.length} unique candidate targets matching your criteria.`
+    };
+  }
+);
+
+
+// ==========================================
+// FILE: src/app/actions.ts
+// ==========================================
+
+'use server';
+
+import { SecurityUtils } from '@/lib/security';
+import { logger } from '@/lib/logger';
+import { RetryManager } from '@/lib/retry';
+import { ErrorLogger } from '@/lib/error-logger';
+
+type FindLeadsInput = {
+  searchContext: string;
+  searchTerms: string[];
+  location?: string;
+  industry?: string;
+  employeeCount?: string;
+  techStack?: string;
+};
+
+function handleActionError(error: any, actionName: string): { error: string } {
+  const errObj = error instanceof Error ? error : new Error(String(error));
+  ErrorLogger.logError(errObj, { actionName });
+  
+  const errorMessage = errObj.message;
+  if (
+    errorMessage.includes('503') ||
+    errorMessage.includes('Service Unavailable') ||
+    errorMessage.toLowerCase().includes('high demand') ||
+    errorMessage.toLowerCase().includes('overloaded') ||
+    errorMessage.toLowerCase().includes('rate limit') ||
+    errorMessage.toLowerCase().includes('resource exhausted')
+  ) {
+    return { error: 'The AI is currently overloaded, please try again.' };
+  }
+  
+  return { error: 'The lead discovery process encountered an issue. Please check the debug logs for details.' };
+}
+
+async function withTimeout<T>(fn: () => Promise<T>, ms: number = 45000, actionName: string): Promise<T> {
+  const executeWithTimeout = async () => {
+    let timeoutId: NodeJS.Timeout;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        logger.error(`[Timeout] Action "${actionName}" exceeded ${ms}ms limit.`);
+        reject(new Error(`The request timed out. Please try again.`));
+      }, ms);
+    });
+
+    try {
+      const result = await Promise.race([fn(), timeoutPromise]);
+      clearTimeout(timeoutId!);
+      return result;
+    } catch (error) {
+      clearTimeout(timeoutId!);
+      throw error;
+    }
+  };
+
+  return RetryManager.withRetry(executeWithTimeout, {
+    maxRetries: 3,
+    baseDelay: 2000,
+    maxDelay: 15000,
+    retryableErrors: ['503', '500', '502', '504', 'high demand', 'overloaded', 'rate limit', 'ECONNRESET', 'ETIMEDOUT']
+  });
+}
+
+export async function findLeadsAction(input: FindLeadsInput) {
+  try {
+    const sanitizedInput = {
+      ...input,
+      searchContext: SecurityUtils.sanitizePromptInput(input.searchContext),
+      searchTerms: input.searchTerms ? input.searchTerms.map(t => SecurityUtils.sanitizePromptInput(t)) : [],
+      location: input.location ? SecurityUtils.sanitizePromptInput(input.location) : undefined,
+    };
+    const { findLeads } = await import('@/ai/flows/find-leads');
+    return await withTimeout(() => findLeads(sanitizedInput), 90000, 'findLeads');
+  } catch (error) {
+    return handleActionError(error, 'findLeadsAction');
+  }
+}
+
+export async function createLeadFromFormAction(input: any) {
+  try {
+    const { createLeadFromForm } = await import('@/ai/flows/create-lead-from-form');
+    // Doesn't strictly need a timeout but we can wrap it with a 30s timeout and retries for network resilience
+    return await withTimeout(() => createLeadFromForm(input), 30000, 'createLeadFromForm');
+  } catch (error) {
+    return handleActionError(error, 'createLeadFromFormAction');
+  }
+}
+
+export async function prospectFromStreetViewAction(input: any) {
+  try {
+    const { prospectFromStreetView } = await import('@/ai/flows/prospect-from-street-view');
+    return await withTimeout(() => prospectFromStreetView(input), 60000, 'prospectFromStreetView');
+  } catch (error) {
+    return handleActionError(error, 'prospectFromStreetViewAction');
+  }
+}
+
+export async function analyzeImageForLeadAction(input: any) {
+  try {
+    const { analyzeImageForLead } = await import('@/ai/flows/analyze-image-for-lead');
+    return await withTimeout(() => analyzeImageForLead(input), 45000, 'analyzeImageForLead');
+  } catch (error) {
+    return handleActionError(error, 'analyzeImageForLeadAction');
+  }
+}
+
+export async function createJobAction() {
+  try {
+    const { createInMemoryJob } = await import('@/lib/job-store');
+    return createInMemoryJob();
+  } catch (error) {
+    return handleActionError(error, 'createJobAction');
+  }
+}
+
+export async function getJobProgressAction(jobId: string) {
+  try {
+    const { getInMemoryJob } = await import('@/lib/job-store');
+    return getInMemoryJob(jobId);
+  } catch (error) {
+    return handleActionError(error, 'getJobProgressAction');
+  }
+}
+
+export async function extractLeadFromUrlAction(input: any) {
+  try {
+    if (input.url && !SecurityUtils.validateUrl(input.url)) {
+      throw new Error('Invalid URL provided.');
+    }
+    const { extractLeadFromUrl } = await import('@/ai/flows/extract-lead-from-url');
+    return await withTimeout(() => extractLeadFromUrl(input), 45000, 'extractLeadFromUrl');
+  } catch (error) {
+    return handleActionError(error, 'extractLeadFromUrlAction');
+  }
+}
+
+export async function extractMultipleLeadsFromUrlAction(input: any) {
+  try {
+    if (input.url && !SecurityUtils.validateUrl(input.url)) {
+      throw new Error('Invalid URL provided.');
+    }
+    const { extractMultipleLeadsFromUrl } = await import('@/ai/flows/extract-multiple-leads-from-url');
+    return await withTimeout(() => extractMultipleLeadsFromUrl(input), 60000, 'extractMultipleLeadsFromUrl');
+  } catch (error) {
+    return handleActionError(error, 'extractMultipleLeadsFromUrlAction');
+  }
+}
+
+export async function analyzeAdForLeadAction(input: any) {
+  try {
+    const { analyzeAdForLead } = await import('@/ai/flows/analyze-ad-for-lead');
+    return await withTimeout(() => analyzeAdForLead(input), 45000, 'analyzeAdForLead');
+  } catch (error) {
+    return handleActionError(error, 'analyzeAdForLeadAction');
+  }
+}
+
+export async function discoverUrlsAction(input: any) {
+  try {
+    const sanitizedInput = {
+      ...input,
+      query: SecurityUtils.sanitizePromptInput(input.query)
+    };
+    const { discoverUrls } = await import('@/ai/flows/discover-urls');
+    return await withTimeout(() => discoverUrls(sanitizedInput), 90000, 'discoverUrls');
+  } catch (error) {
+    return handleActionError(error, 'discoverUrlsAction');
+  }
+}
+
+export async function findLeadsByPlaceAction(input: { query: string }) {
+  try {
+    const sanitizedInput = {
+      query: SecurityUtils.sanitizePromptInput(input.query)
+    };
+    const { findLeadsByPlace } = await import('@/ai/flows/find-leads-by-place');
+    return await withTimeout(() => findLeadsByPlace(sanitizedInput), 60000, 'findLeadsByPlace');
+  } catch (error) {
+    return handleActionError(error, 'findLeadsByPlaceAction');
+  }
+}
+
+
+
+// ==========================================
+// FILE: src/ai/flows/extract-lead-from-url.ts
+// ==========================================
+
+'use server';
+/**
+ * @fileOverview Lead intelligence extraction with enhanced HTML sanitization and technical fingerprinting.
+ */
+
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { logger } from '@/lib/logger';
+import { ExtractedLeadDataSchema, type ExtractedLeadData } from '@/types';
+import { cleanHtml } from '@/lib/html-cleaner';
+import { updateInMemoryJob } from '@/lib/job-store';
+
+const ExtractLeadFromUrlInputSchema = z.object({
+  url: z.string().url().describe("The URL of the website to analyze."),
+  jobId: z.string().optional().describe("Optional in-memory jobId to write progress logs to."),
+});
+
+/**
+ * Identifies technologies based on common HTML/Script markers.
+ */
+function detectTech(html: string): string[] {
+  const techs: string[] = [];
+  if (html.includes('cdn.shopify.com')) techs.push('Shopify');
+  if (html.includes('woocommerce')) techs.push('WooCommerce');
+  if (html.includes('stripe.com')) techs.push('Stripe');
+  if (html.includes('klaviyo')) techs.push('Klaviyo');
+  if (html.includes('intercom.io')) techs.push('Intercom');
+  return techs;
+}
+
+const prompt = ai.definePrompt({
+  name: 'extractLeadFromUrlPrompt',
+  input: { schema: z.object({ htmlContent: z.string(), url: z.string() }) },
+  output: { schema: ExtractedLeadDataSchema.optional() },
+  prompt: `You are an expert lead intelligence analyst. 
+Extract contact details and company information from the following cleaned HTML.
+The website URL being analyzed is: {{url}}
+
+Look for: Contact Name, Job Title, Company Name, Email, Phone, Website (use the provided URL if not explicitly found in the HTML), and physical/business Address (including city, state, postal code, and country).
+Also note 'evidence' for each field found (e.g. "from about page bio").
+
+CRITICAL FORMATTING REQUIREMENTS:
+- The "website" field MUST be strictly a clean, valid URL or domain string (e.g., "https://willship.com.au" or "willship.com.au"). Do NOT include any explanations, justifications, meta-commentary, sentences, or paragraphs in the "website" field. If you must explain your reasoning, place that text in the "evidence" object under the "website" key.
+- Only "companyName" and "website" are required.
+- If you cannot find the contact name, email, phone, or address details, do NOT write "null", "Unknown", or make up placeholders. Simply leave them empty/blank (empty string or exclude them from the response).
+
+HTML Content:
+\`\`\`html
+{{htmlContent}}
+\`\`\`
+`,
+});
+
+export async function extractLeadFromUrl(input: z.infer<typeof ExtractLeadFromUrlInputSchema>) {
+  logger.info(`[Intelligence] Processing target URL: ${input.url}`);
+  const jobId = input.jobId;
+  
+  try {
+    if (jobId) {
+      updateInMemoryJob(jobId, { status: 'processing', progress: 10, message: 'Launching crawler and fetching homepage...' });
+    }
+
+    const { deepCrawler } = await import('@/lib/deep-crawler');
+    
+    // We modify deep crawler invocation to report progress if jobId is active
+    if (jobId) {
+      updateInMemoryJob(jobId, { progress: 30, message: 'Analyzing homepage structure and locating subpages...' });
+    }
+
+    const scrapeResult = await deepCrawler.crawl(input.url);
+    
+    if (!scrapeResult.success || !scrapeResult.html) {
+      if (jobId) {
+        updateInMemoryJob(jobId, { status: 'failed', error: scrapeResult.error || 'Empty HTML' });
+      }
+      return { 
+        message: `Failed to analyze page: ${scrapeResult.error || 'Scrape yielded empty html'}`, 
+        extractedData: null 
+      };
+    }
+    
+    if (jobId) {
+      updateInMemoryJob(jobId, { progress: 60, message: 'Sanitizing text and starting AI parsing...' });
+    }
+
+    const rawHtml = scrapeResult.html;
+    const technicalFingerprints = detectTech(rawHtml);
+    const cleanedHtml = cleanHtml(rawHtml);
+
+    const { output } = await prompt({ htmlContent: cleanedHtml, url: input.url });
+
+    if (!output || (!output.companyName && !output.name)) {
+      if (jobId) {
+        updateInMemoryJob(jobId, { status: 'failed', message: 'No lead signatures identified.' });
+      }
+      return { 
+        message: "No lead signatures identified on this page.", 
+        extractedData: null 
+      };
+    }
+
+    if (jobId) {
+      updateInMemoryJob(jobId, { progress: 90, message: 'Finalizing extraction results...' });
+    }
+
+    // Merge regex discovered emails with AI extraction outputs
+    const emails = [...new Set([...(output.email ? [output.email] : []), ...scrapeResult.emails])];
+
+    const finalData: ExtractedLeadData = {
+      ...output,
+      email: emails.length > 0 ? emails[0] : (output.email || ''),
+      detectedTech: Array.from(new Set([...(output.detectedTech || []), ...technicalFingerprints])),
+      details: `${output.details || ''}
+      
+[Local Extraction Details]
+Method: ${scrapeResult.method} (Deep Crawled)
+Local Emails: ${scrapeResult.emails.join(', ') || 'None'}
+Company Name: ${scrapeResult.companyInfo.name || 'N/A'}
+Industry: ${scrapeResult.companyInfo.industry || 'N/A'}
+Employees: ${scrapeResult.companyInfo.employeeCount || 'N/A'}`
+    };
+
+    if (jobId) {
+      updateInMemoryJob(jobId, { status: 'completed', progress: 100, message: 'Analysis complete!' });
+    }
+
+    return { 
+      extractedData: finalData, 
+      message: `Lead intelligence successfully extracted using ${scrapeResult.method} deep-crawler.` 
+    };
+  } catch (error: any) {
+    logger.error(`[Intelligence] Analysis failed: ${error.message}`);
+    if (jobId) {
+      updateInMemoryJob(jobId, { status: 'failed', error: error.message, message: `Error: ${error.message}` });
+    }
+    return { 
+      message: `Failed to analyze page: ${error.message}`, 
+      extractedData: null 
+    };
+  }
+}
+
+
+// ==========================================
+// FILE: src/ai/flows/extract-multiple-leads-from-url.ts
+// ==========================================
+
+'use server';
+/**
+ * @fileOverview An AI flow to analyze a URL and extract MULTIPLE leads with reliability and sanitization.
+ */
+
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { logger } from '@/lib/logger';
+import { ExtractedLeadDataSchema } from '@/types';
+import { ComplianceManager } from '@/lib/compliance';
+import { RetryManager } from '@/lib/retry';
+import { LeadValidator } from '@/lib/lead-validator';
+import { AIConfidenceScorer } from '@/lib/ai-confidence';
+import fetch from 'node-fetch';
+
+const ExtractMultipleLeadsInputSchema = z.object({
+  url: z.string().url().describe("The URL of the webpage to analyze, e.g., a partners or portfolio page."),
+});
+export type ExtractMultipleLeadsInput = z.infer<typeof ExtractMultipleLeadsInputSchema>;
+
+const ExtractMultipleLeadsOutputSchema = z.object({
+    leads: z.array(z.any()).optional(),
+    message: z.string().describe("A message describing the outcome of the operation."),
+});
+export type ExtractMultipleLeadsOutput = z.infer<typeof ExtractMultipleLeadsOutputSchema>;
+
+import { cleanHtml } from '@/lib/html-cleaner';
+
+const prompt = ai.definePrompt({
+  name: 'extractMultipleLeadsFromUrlPrompt',
+  input: { schema: z.object({ htmlContent: z.string() }) },
+  output: { schema: z.object({ leads: z.array(ExtractedLeadDataSchema) }) },
+  prompt: `Analyze the provided cleaned HTML content and identify all individual companies, partners, or customers listed.
+For each entity, extract: author name as 'name', company name as 'companyName', their quote/details as 'details', their 'website', and any physical 'address' information (including city, state, postalCode, country).
+Ignore the primary company that owns the website.
+
+HTML to analyze:
+\`\`\`html
+{{htmlContent}}
+\`\`\`
+`,
+});
+
+export async function extractMultipleLeadsFromUrl(
+  input: ExtractMultipleLeadsInput
+): Promise<ExtractMultipleLeadsOutput> {
+  return extractMultipleLeadsFromUrlFlow(input);
+}
+
+const extractMultipleLeadsFromUrlFlow = ai.defineFlow(
+  {
+    name: 'extractMultipleLeadsFromUrlFlow',
+    inputSchema: ExtractMultipleLeadsInputSchema,
+    outputSchema: ExtractMultipleLeadsOutputSchema,
+  },
+  async ({ url }) => {
+    logger.info(`[Bulk URL Analysis] Starting lead extraction for: ${url}`);
+    
+    const compliance = ComplianceManager.getInstance();
+    
+    const robotsCheck = await compliance.checkRobotsTxt(url);
+    if (!robotsCheck.allowed) {
+      return { message: `Scraping blocked: ${robotsCheck.reason}` };
+    }
+
+    let rawHtml = '';
+    try {
+      const response = await RetryManager.withRetry(async () => {
+        const res = await fetch(url, { 
+          headers: { 'User-Agent': 'LeadAceBot/1.0 (https://lead-ace.com/bot)' }
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res;
+      });
+      rawHtml = await response.text();
+    } catch (error: any) {
+      logger.error(`[Bulk URL Analysis] Failed to fetch content: ${error.message}`);
+      return { message: `Network error: ${error.message}` };
+    }
+
+    const htmlContent = cleanHtml(rawHtml);
+
+    try {
+      const { output } = await prompt({ htmlContent });
+
+      if (!output?.leads || output.leads.length === 0) {
+        logger.warn(`[Bulk URL Analysis] No leads identified in content for ${url}`);
+        return { message: "The AI could not identify a list of potential leads from this webpage." };
+      }
+      
+      const processedLeads = await Promise.all(output.leads.map(async (rawLead) => {
+        const enhanced = LeadValidator.enhance(rawLead);
+        const validation = await LeadValidator.validate(enhanced);
+        const confidence = await AIConfidenceScorer.calculate(enhanced);
+        const compCheck = await compliance.verifyLeadCompliance(enhanced);
+
+        return {
+          ...enhanced,
+          confidenceScore: confidence,
+          validationErrors: validation.errors,
+          compliance: {
+            gdprCompliant: compCheck.gdprCompliant,
+            ccpaCompliant: compCheck.ccpaCompliant,
+            consentTimestamp: Date.now()
+          }
+        };
+      }));
+
+      logger.info(`[Bulk URL Analysis] Extracted ${processedLeads.length} leads from ${url}`);
+
+      return {
+        leads: processedLeads,
+        message: `Successfully extracted ${processedLeads.length} potential leads.`
+      };
+    } catch (error: any) {
+      logger.error(`[Bulk URL Analysis] AI processing failed: ${error.message}`);
+      return { message: `The AI failed to analyze the webpage content. Details in Debug logs.` };
+    }
+  }
+);
+
+
+// ==========================================
+// FILE: src/lib/scraper.ts
+// ==========================================
+
+import { requestQueue } from './request-queue';
+import { logger } from './logger';
+import { SecurityUtils } from './security';
+import { RetryStrategy } from './retry-strategy';
+import { complianceManager } from './compliance';
+import { getRandomUserAgent } from './user-agents';
+import * as cheerio from 'cheerio';
+
+export type ScrapedLead = {
+  name: string;
+  company: { name: string; website?: string };
+  source: string;
+  details: string; // Scraped/Snippet text
+};
+
+type ScrapeWithAIParams = {
+  source: 'linkedin' | 'crunchbase' | 'company-websites' | 'news-articles';
+  searchTerms: string[];
+  location?: string;
+  maxResults: number;
+};
+
+// Rate limiter
+class RateLimiter {
+  private lastRequestTime = 0;
+  private minDelay = 2000; // 2 seconds between requests
+
+  async wait() {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    if (timeSinceLastRequest < this.minDelay) {
+      await new Promise(resolve => setTimeout(resolve, this.minDelay - timeSinceLastRequest));
+    }
+    this.lastRequestTime = Date.now();
+  }
+}
+
+const rateLimiter = new RateLimiter();
+
+/**
+ * Decodes DuckDuckGo redirect URLs to get the target destination URL.
+ */
+function decodeDdgUrl(href: string): string {
+  try {
+    if (href.startsWith('//')) {
+      href = 'https:' + href;
+    }
+    const url = new URL(href);
+    const uddg = url.searchParams.get('uddg');
+    if (uddg) {
+      return decodeURIComponent(uddg);
+    }
+  } catch (e) {
+    // Fallback to raw href if URL parsing fails
+  }
+  return href;
+}
+
+function getRequestHeaders(referer?: string): Record<string, string> {
+  return {
+    'User-Agent': getRandomUserAgent(),
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Referer': referer || 'https://www.google.com/',
+  };
+}
+
+/**
+ * Perform a web search using Serper API (if key exists) or fallback to DuckDuckGo.
+ */
+export async function performWebSearch(query: string, maxResults: number): Promise<{ url: string; title: string; snippet: string }[]> {
+  const serperApiKey = process.env.SERPER_API_KEY;
+  
+  return requestQueue.add(async () => {
+    return RetryStrategy.withExponentialBackoff(async () => {
+      await rateLimiter.wait();
+      
+      try {
+        if (serperApiKey) {
+          logger.info(`[Scraper] Searching Serper API for: "${query}"`);
+          const response = await fetch('https://google.serper.dev/search', {
+            method: 'POST',
+            headers: {
+              'X-API-KEY': serperApiKey,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ q: query, num: maxResults })
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Serper API returned status ${response.status}`);
+          }
+          
+          const data = await response.json();
+          const results = (data.organic || []).map((r: any) => ({
+            url: r.link,
+            title: r.title || '',
+            snippet: r.snippet || ''
+          })).slice(0, maxResults);
+          
+          logger.info(`[Scraper] Found ${results.length} Serper results`);
+          return results;
+        }
+
+        // Fallback to DuckDuckGo
+        logger.info(`[Scraper] Searching DuckDuckGo for: "${query}"`);
+        const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+        const response = await fetch(searchUrl, {
+          headers: getRequestHeaders('https://duckduckgo.com/'),
+        });
+
+        if (!response.ok) {
+          throw new Error(`DuckDuckGo returned status ${response.status}`);
+        }
+
+        const html = await response.text();
+        const $ = cheerio.load(html);
+        
+        const items: { href: string; title: string; snippet: string }[] = [];
+        
+        $('.result').each((i, el) => {
+          const a = $(el).find('.result__a');
+          const snippetEl = $(el).find('.result__snippet');
+          const href = a.attr('href');
+          
+          if (href) {
+            items.push({
+              href,
+              title: a.text().trim() || '',
+              snippet: snippetEl.text().trim() || '',
+            });
+          }
+        });
+
+        const parsedResults = items
+          .map((r) => ({
+            url: decodeDdgUrl(r.href),
+            title: r.title,
+            snippet: r.snippet
+          }))
+          .filter((r) => 
+            r.url && 
+            !r.url.includes('duckduckgo.com') && 
+            !r.url.includes('google.com') &&
+            SecurityUtils.validateUrl(r.url)
+          )
+          .slice(0, maxResults);
+
+        logger.info(`[Scraper] Found ${parsedResults.length} DDG results`);
+        return parsedResults;
+      } catch (error: any) {
+        logger.error(`[Scraper] Search failed: ${error.message}`);
+        throw error; // Propagate for RetryStrategy
+      }
+    }, {
+      maxRetries: 3,
+      baseDelay: 2000,
+    });
+  });
+}
+
+/**
+ * Crawls a target company website homepage and major sub-pages (About, Contact, etc.)
+ * Extracts meta description, structured data, and text.
+ */
+export async function crawlWebsite(targetUrl: string): Promise<string> {
+  if (!SecurityUtils.validateUrl(targetUrl)) {
+    logger.warn(`[Scraper] Blocked crawl attempt for insecure or local URL: ${targetUrl}`);
+    return '';
+  }
+
+  // Respect robots.txt compliance rules
+  const compliance = await complianceManager.checkRobotsTxt(targetUrl);
+  if (!compliance.allowed) {
+    logger.warn(`[Scraper] Crawl aborted for compliance reasons: ${compliance.reason || 'Robots.txt constraint'}`);
+    return '';
+  }
+  
+  logger.info(`[Scraper] Starting deep crawl of: ${targetUrl}`);
+  
+  return requestQueue.add(async () => {
+    try {
+      // Respect Crawl-Delay if specified in robots.txt
+      if (compliance.crawlDelay && compliance.crawlDelay > 0) {
+        const delayMs = compliance.crawlDelay * 1000;
+        logger.info(`[Scraper] Respecting robots.txt Crawl-Delay. Waiting ${delayMs}ms before fetch...`);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      // 1. Crawl Homepage
+      const response = await fetch(targetUrl, { 
+        headers: getRequestHeaders(new URL(targetUrl).origin),
+        signal: controller.signal as any
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Target returned status ${response.status}`);
+      }
+
+      const html = await response.text();
+      const $ = cheerio.load(html);
+
+      // Remove script, style, etc. but keep application/ld+json script tags before stripping them
+      const jsonLdScripts = $('script[type="application/ld+json"]')
+        .map((i, el) => $(el).html())
+        .get()
+        .join('\n');
+
+      $('script, style, noscript, iframe, svg, header, footer, nav').remove();
+
+      const text = $('body').text().replace(/\s+/g, ' ').trim();
+      const metaDescription = $('meta[name="description"]').attr('content') || '';
+      
+      // Structured Data extraction: OpenGraph metadata (Priority 2)
+      const ogTags: Record<string, string> = {};
+      $('meta[property^="og:"]').each((i, el) => {
+        const property = $(el).attr('property');
+        const content = $(el).attr('content');
+        if (property && content) {
+          ogTags[property] = content;
+        }
+      });
+
+      // Extract emails, phones, and social links locally using Cheerio
+      const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+      const phoneRegex = /(?:\+\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g;
+      const emails = Array.from(new Set(text.match(emailRegex) || []));
+      const phones = Array.from(new Set(text.match(phoneRegex) || []));
+
+      const socialLinks: Record<string, string> = {};
+      const links = $('a')
+        .map((i, el) => ({ href: $(el).attr('href'), text: $(el).text().trim() }))
+        .get()
+        .filter(l => l.href && l.href.startsWith('http'));
+
+      links.forEach(l => {
+        if (l.href) {
+          if (l.href.includes('linkedin.com')) socialLinks.linkedin = l.href;
+          if (l.href.includes('twitter.com') || l.href.includes('x.com')) socialLinks.twitter = l.href;
+          if (l.href.includes('facebook.com')) socialLinks.facebook = l.href;
+        }
+      });
+
+      let combinedText = '';
+      if (jsonLdScripts) {
+        combinedText += `[STRUCTURED JSON-LD]\n${jsonLdScripts.substring(0, 8000)}\n\n`;
+      }
+      if (Object.keys(ogTags).length > 0) {
+        combinedText += `[OPEN GRAPH METADATA]\n${JSON.stringify(ogTags)}\n\n`;
+      }
+      if (emails.length > 0) {
+        combinedText += `[LOCAL EMAILS FOUND]\n${emails.join(', ')}\n\n`;
+      }
+      if (phones.length > 0) {
+        combinedText += `[LOCAL PHONES FOUND]\n${phones.join(', ')}\n\n`;
+      }
+      if (Object.keys(socialLinks).length > 0) {
+        combinedText += `[SOCIAL LINKS FOUND]\n${JSON.stringify(socialLinks)}\n\n`;
+      }
+      combinedText += `[META DESCRIPTION]\n${metaDescription}\n\n`;
+      combinedText += `[HOMEPAGE CONTENT]\n${text}\n\n`;
+
+      // 2. Discover high-yield subpages (About, Contact, Team)
+      const targetKeywords = ['about', 'contact', 'team', 'staff'];
+      const origin = new URL(targetUrl).origin;
+      
+      const subpageUrls = Array.from(
+        new Set(
+          links
+            .map(l => l.href)
+            .filter(href => {
+              if (!href) return false;
+              try {
+                const urlObj = new URL(href);
+                if (urlObj.origin !== origin) return false;
+                const path = urlObj.pathname.toLowerCase();
+                return targetKeywords.some(keyword => path.includes(keyword));
+              } catch (e) {
+                return false;
+              }
+            })
+        )
+      ).slice(0, 2) as string[]; 
+
+      for (const subpageUrl of subpageUrls) {
+        if (!subpageUrl) continue;
+        try {
+          logger.info(`[Scraper] Crawling subpage: ${subpageUrl}`);
+          const subController = new AbortController();
+          const subTimeout = setTimeout(() => subController.abort(), 10000);
+          
+          const subRes = await fetch(subpageUrl, { 
+            headers: getRequestHeaders(origin),
+            signal: subController.signal as any
+          });
+          clearTimeout(subTimeout);
+
+          if (subRes.ok) {
+            const subHtml = await subRes.text();
+            const $sub = cheerio.load(subHtml);
+            $sub('script, style, noscript, iframe, svg, header, footer, nav').remove();
+            const subpageText = $sub('body').text().replace(/\s+/g, ' ').trim();
+            combinedText += `[SUBPAGE CONTENT: ${subpageUrl}]\n${subpageText}\n\n`;
+          }
+        } catch (e: any) {
+          logger.warn(`[Scraper] Failed to crawl subpage ${subpageUrl}: ${e.message}`);
+        }
+      }
+
+      return combinedText.substring(0, 40000); 
+    } catch (error: any) {
+      logger.error(`[Scraper] Crawler failed for ${targetUrl}: ${error.message}`);
+      return '';
+    }
+  });
+
+}
+
+/**
+ * Main AI discovery scraping pipeline.
+ */
+export async function scrapeWithAI(params: ScrapeWithAIParams): Promise<ScrapedLead[]> {
+  logger.info(`[Scraper] Executing search for source ${params.source} with terms: ${params.searchTerms.join(', ')}`);
+  
+  let query = '';
+  const searchBase = params.searchTerms.map(t => `"${t}"`).join(' ');
+  
+  // Detect if target is Australia
+  const isAustralia = !params.location || 
+    /australia|nsw|vic|qld|wa|sa|tas|act|nt/i.test(params.location);
+
+  // Normalize location constraint
+  let locationConstraint = params.location ? ` "${params.location}"` : '';
+  if (isAustralia && params.location && !/australia/i.test(params.location)) {
+    locationConstraint += ' "Australia"';
+  }
+
+  switch (params.source) {
+    case 'linkedin':
+      const linkedinDomain = isAustralia ? 'au.linkedin.com/in/' : 'linkedin.com/in/';
+      query = `site:${linkedinDomain} ${searchBase}${locationConstraint}`;
+      break;
+    case 'crunchbase':
+      query = `site:crunchbase.com/organization/ ${searchBase}${locationConstraint}`;
+      break;
+    case 'news-articles':
+      query = `${searchBase}${locationConstraint} (news OR funding OR hire OR press)${isAustralia ? ' site:.au' : ''}`;
+      break;
+    case 'company-websites':
+    default:
+      query = `${searchBase}${locationConstraint} website${isAustralia ? ' site:.au' : ''}`;
+      break;
+  }
+
+  const searchResults = await performWebSearch(query, params.maxResults);
+  const scrapedLeads: ScrapedLead[] = [];
+
+  for (const result of searchResults) {
+    try {
+      let details = result.snippet;
+      let companyName = 'Unknown Company';
+      let personName = 'Unknown Lead';
+
+      const titleParts = result.title.split(/[-|]/);
+      if (titleParts.length > 0) {
+        personName = titleParts[0].trim();
+      }
+      if (titleParts.length > 1) {
+        companyName = titleParts[titleParts.length - 2].trim();
+      }
+
+      if (params.source === 'company-websites' && !result.url.includes('linkedin.com') && !result.url.includes('crunchbase.com')) {
+        logger.info(`[Scraper] Found target website for crawling: ${result.url}`);
+        const siteContent = await crawlWebsite(result.url);
+        if (siteContent.trim().length > 100) {
+          details = siteContent;
+        }
+        
+        try {
+          const parsedUrl = new URL(result.url);
+          companyName = parsedUrl.hostname.replace('www.', '');
+        } catch (e) {}
+      }
+
+      scrapedLeads.push({
+        name: personName,
+        company: { name: companyName, website: result.url },
+        source: `Real Scraper (${params.source})`,
+        details: `URL: ${result.url}\nSearch Snippet: ${result.snippet}\n\nSite Content:\n${details}`,
+      });
+    } catch (err: any) {
+      logger.error(`[Scraper] Failed to process search result ${result.url}: ${err.message}`);
+    }
+  }
+
+  return scrapedLeads;
+}
+
+
+// ==========================================
+// SCRAPE RESULTS FOR https://medshop.com.au
+// ==========================================
+
+[ComplianceManager] Fetching robots.txt for: https://medshop.com.au
+[Scraper] Starting deep crawl of: https://medshop.com.au
+Scraped text length: 5437
+Preview:
+ [STRUCTURED JSON-LD]
+[{"@context":"https://schema.org","@type":"Organization","name":"Medshop Australia","description":"Medical Supplies from leading brands 3M Littmann Stethoscopes, Welch Allyn and Omron Blood Pressure Monitors is just the start of the vital medical equipment Medshop provides to the Australian medical market. Medshop is an official NDIS Provider","legalName":"Multipoint Technologies Pty Ltd","address":{"@type":"PostalAddress","streetAddress":"2/52 Fox Drive","addressLocality":"Dandenong South","addressRegion":"VIC","postalCode":"3175","addressCountry":"Australia"},"email":"sales@medshop.com.au","url":"https://www.medshop.com.au/","sameAs":["https://www.facebook.com/MedshopAustralia/","https://www.instagram.com/medshop.official/"],"taxID":"ABN: 77 112 642 798","identifier":"NDIS PROVIDER No.: 4050075557","logo":"https://cdn.shopify.com/oxygen/1284407394/1000000355/4p42g8re1/build/_assets/logo-DU6BVD77.svg?width=328\u0026height=48"},{"@context":"https://schema.org","@type":"WebSite","name":"Medshop Australia","url":"https://www.medshop.com.au/"}]
+
+[OPEN GRAPH METADATA]
+{"og:description":"Medical Supplies from leading brands 3M Littmann Stethoscopes, Welch Allyn and Omron Blood Pressure Monitors, Cherokee Scrubs and more. Official NDIS Provider","og:title":"Medshop: Medical Supplies & Equipment Melbourne, Sydney, Perth & Adelaide | Medshop Australia","og:image":"https://cdn.sanity.io/images/ju28asdf/production/0a176ea1af8a6553178955f11c86c9de80918b1c-2880x1382"}
