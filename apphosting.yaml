@@ -15,4 +15,4 @@ env:
   - variable: GEMINI_API_KEY
     secret: gemini-api-key
   - variable: SERPER_API_KEY
-    value: ""
+    value: "placeholder_key"
