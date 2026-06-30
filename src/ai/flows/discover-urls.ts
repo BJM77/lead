@@ -8,7 +8,7 @@ import { z } from 'genkit';
 import { logger } from '@/lib/logger';
 import { DiscoveredUrlSchema, type DiscoveredUrl } from '@/types';
 
-import { searchDuckDuckGo } from '@/lib/scraper';
+import { performWebSearch } from '@/lib/scraper';
 
 const DiscoverUrlsInputSchema = z.object({
   query: z.string().describe("The search query or keyword to find target URLs."),
@@ -58,9 +58,9 @@ const discoverUrlsFlow = ai.defineFlow(
 
     let searchResults: { url: string; title: string; snippet: string }[] = [];
     try {
-        searchResults = await searchDuckDuckGo(finalQuery, requestLimit);
+        searchResults = await performWebSearch(finalQuery, requestLimit);
     } catch (e: any) {
-        logger.error(`[URL Discovery] DuckDuckGo search failed: ${e.message}`);
+        logger.error(`[URL Discovery] Web search failed: ${e.message}`);
     }
 
     const excludeSet = new Set((input.excludeUrls || []).map(u => normalizeUrl(u)));

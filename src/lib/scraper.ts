@@ -66,16 +66,44 @@ function getRequestHeaders(referer?: string): Record<string, string> {
 }
 
 /**
- * Perform a DuckDuckGo search using fetch with retry backoff.
+ * Perform a web search using Serper API (if key exists) or fallback to DuckDuckGo.
  */
-export async function searchDuckDuckGo(query: string, maxResults: number): Promise<{ url: string; title: string; snippet: string }[]> {
-  logger.info(`[Scraper] Searching DuckDuckGo for: "${query}"`);
+export async function performWebSearch(query: string, maxResults: number): Promise<{ url: string; title: string; snippet: string }[]> {
+  const serperApiKey = process.env.SERPER_API_KEY;
   
   return requestQueue.add(async () => {
     return RetryStrategy.withExponentialBackoff(async () => {
       await rateLimiter.wait();
       
       try {
+        if (serperApiKey) {
+          logger.info(`[Scraper] Searching Serper API for: "${query}"`);
+          const response = await fetch('https://google.serper.dev/search', {
+            method: 'POST',
+            headers: {
+              'X-API-KEY': serperApiKey,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ q: query, num: maxResults })
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Serper API returned status ${response.status}`);
+          }
+          
+          const data = await response.json();
+          const results = (data.organic || []).map((r: any) => ({
+            url: r.link,
+            title: r.title || '',
+            snippet: r.snippet || ''
+          })).slice(0, maxResults);
+          
+          logger.info(`[Scraper] Found ${results.length} Serper results`);
+          return results;
+        }
+
+        // Fallback to DuckDuckGo
+        logger.info(`[Scraper] Searching DuckDuckGo for: "${query}"`);
         const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
         const response = await fetch(searchUrl, {
           headers: getRequestHeaders('https://duckduckgo.com/'),
@@ -328,7 +356,7 @@ export async function scrapeWithAI(params: ScrapeWithAIParams): Promise<ScrapedL
       break;
   }
 
-  const searchResults = await searchDuckDuckGo(query, params.maxResults);
+  const searchResults = await performWebSearch(query, params.maxResults);
   const scrapedLeads: ScrapedLead[] = [];
 
   for (const result of searchResults) {
