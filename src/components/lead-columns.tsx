@@ -116,10 +116,25 @@ export const columns = ({ onLeadDeleted }: ColumnsProps): ColumnDef<Lead>[] => [
     cell: ({ row }) => {
       const lead = row.original;
       return (
-        <div className="font-medium">
-          <div className="text-sm font-bold text-primary">{lead.company.name}</div>
-          <div className="text-xs text-muted-foreground">{lead.name}</div>
-        </div>
+        <Sheet>
+          <SheetTrigger asChild>
+            <button className="text-left font-medium hover:underline transition-all group">
+              <div className="text-sm font-bold text-primary group-hover:text-blue-600 dark:group-hover:text-blue-400">{lead.company.name}</div>
+              <div className="text-xs text-muted-foreground group-hover:text-blue-500/80">{lead.name}</div>
+            </button>
+          </SheetTrigger>
+          <SheetContent className="w-full sm:max-w-lg overflow-y-auto bg-white dark:bg-zinc-950">
+            <SheetHeader>
+              <SheetTitle className="text-primary">
+                {lead.company.name} Intelligence
+              </SheetTitle>
+              <SheetDescription>
+                Full extraction history, growth signals, and compliance metadata.
+              </SheetDescription>
+            </SheetHeader>
+            <LeadDetails lead={lead} />
+          </SheetContent>
+        </Sheet>
       );
     },
   },
@@ -245,7 +260,7 @@ export const columns = ({ onLeadDeleted }: ColumnsProps): ColumnDef<Lead>[] => [
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetContent className="w-full sm:max-w-lg overflow-y-auto bg-white dark:bg-zinc-950">
             <SheetHeader>
               <SheetTitle className="text-primary">
                 {lead.company.name} Intelligence

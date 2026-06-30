@@ -36,6 +36,7 @@ export default function LoginPage() {
     try {
       // REAL FIREBASE AUTH CALL
       // This will fail immediately if the user doesn't match Firebase Authentication
+      if (!auth) throw new Error('Authentication is currently unavailable.');
       await signInWithEmailAndPassword(auth, email, password);
       
       console.log('[Auth] Tactical handshake successful.');

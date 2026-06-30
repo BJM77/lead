@@ -1,14 +1,16 @@
 // src/app/api/system-status/route.ts
 import { NextResponse } from 'next/server';
-import { getFirestore, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
-import { app } from '@/lib/firebase';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { healthCheck } from '@/ai/flows/health-check';
 
 export const dynamic = 'force-dynamic';
 
 async function checkFirebase() {
   try {
-    const db = getFirestore(app);
+    if (!db) {
+      throw new Error('Firebase database is not initialized (missing config).');
+    }
     const logsCollection = collection(db, 'logs');
     const q = query(logsCollection, orderBy('timestamp', 'desc'), limit(1));
     await getDocs(q);

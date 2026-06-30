@@ -71,6 +71,7 @@ export function AuthForm({ isSignup = false }: AuthFormProps) {
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsLoading(true);
     try {
+      if (!auth) throw new Error('Authentication is currently unavailable.');
       if (isSignup) {
         await createUserWithEmailAndPassword(auth, values.email, values.password);
       } else {
@@ -99,6 +100,7 @@ export function AuthForm({ isSignup = false }: AuthFormProps) {
     setIsLoading(true);
     try {
       const provider = new GoogleAuthProvider();
+      if (!auth) throw new Error('Authentication is currently unavailable.');
       await signInWithPopup(auth, provider);
       toast({
         title: 'Login Successful',

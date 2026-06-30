@@ -74,7 +74,7 @@ export default function BulkCapturePage() {
     logger.info(`[Bulk Save] Starting to save ${leadsToSave.length} selected leads.`);
     toast({ title: 'Saving Leads...', description: `Started saving ${leadsToSave.length} leads. See debug logs for progress.` });
 
-    const userId = auth.currentUser?.uid;
+    const userId = auth?.currentUser?.uid;
     if (!userId) {
       toast({ title: 'Authentication Error', description: 'You must be logged in to save leads.', variant: 'destructive' });
       setIsSaving(false);

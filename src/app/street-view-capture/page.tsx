@@ -70,7 +70,7 @@ export default function StreetViewCapturePage() {
     let successCount = 0;
     let failCount = 0;
 
-    const userId = (await import('@/lib/firebase')).auth.currentUser?.uid;
+    const userId = (await import('@/lib/firebase')).auth?.currentUser?.uid;
     if (!userId) {
       toast({ title: 'Authentication Error', description: 'You must be logged in to save leads.', variant: 'destructive' });
       setIsSaving(false);

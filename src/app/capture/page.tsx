@@ -114,7 +114,7 @@ function CaptureContent() {
 
   const handleSaveLead = async (formData: Omit<NewLead, 'userId' | 'createdAt'>) => {
     setIsSaving(true);
-    const userId = (await import('@/lib/firebase')).auth.currentUser?.uid;
+    const userId = (await import('@/lib/firebase')).auth?.currentUser?.uid;
     if (!userId) {
       toast({ title: 'Authentication Error', description: 'You must be logged in to save leads.', variant: 'destructive' });
       setIsSaving(false);

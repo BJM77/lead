@@ -29,6 +29,7 @@ export function UserNav() {
     const router = useRouter();
 
     useEffect(() => {
+        if (!auth) return;
         const unsubscribe = onAuthStateChanged(auth, (user) => {
             setCurrentUser(user);
         });
@@ -37,7 +38,7 @@ export function UserNav() {
 
     const handleSignOut = async () => {
         try {
-            await auth.signOut();
+            await auth?.signOut();
             toast({ title: 'Signed Out', description: 'Session terminated successfully.' });
             router.replace('/login');
         } catch (error: any) {

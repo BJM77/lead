@@ -24,7 +24,7 @@ export default function DashboardPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const user = auth.currentUser;
+    const user = auth?.currentUser;
     if (user) setCurrentUser(user);
 
     const unsubscribe = listenToLeads((dbLeads) => {
